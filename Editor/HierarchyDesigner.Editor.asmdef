@@ -1,0 +1,10 @@
+{
+    "name": "HierarchyDesigner.Editor",
+    "references": [
+        "HierarchyDesigner.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": []
+}
