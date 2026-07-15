@@ -1,10 +1,10 @@
 {
-  "name": "com.antigravity.hierarchydesigner",
+  "name": "com.SanthanavelR.hierarchydesigner",
   "version": "1.0.0",
   "displayName": "Hierarchy Designer",
   "description": "Organize Unity hierarchy visually with custom headers and styling.",
   "unity": "2021.3",
   "author": {
-    "name": "Antigravity"
+    "name": "SanthanavelR"
   }
 }
