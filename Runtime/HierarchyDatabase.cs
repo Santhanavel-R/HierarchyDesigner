@@ -23,6 +23,22 @@ namespace HierarchyDesigner.Runtime
         [Tooltip("The global line style for header separators.")]
         private HierarchyLineStyle globalLineStyle = HierarchyLineStyle.Solid;
 
+        [SerializeField]
+        [Tooltip("Toggle drawing of nesting connection tree lines (breadcrumbs).")]
+        private bool showNestingLines = true;
+
+        [SerializeField]
+        [Tooltip("The color for hierarchy tree connection lines.")]
+        private Color nestingLinesColor = new Color(1f, 1f, 1f, 0.18f);
+
+        [SerializeField]
+        [Tooltip("Toggle drawing of component quick-icons on the right.")]
+        private bool showComponentIcons = true;
+
+        [SerializeField]
+        [Tooltip("Toggle drawing of child count badges on parent GameObjects.")]
+        private bool showChildCountBadges = true;
+
         #endregion
 
         #region Reset Method
@@ -45,6 +61,10 @@ namespace HierarchyDesigner.Runtime
             };
             globalLineColor = Color.white;
             globalLineStyle = HierarchyLineStyle.Solid;
+            showNestingLines = true;
+            nestingLinesColor = new Color(1f, 1f, 1f, 0.18f);
+            showComponentIcons = true;
+            showChildCountBadges = true;
         }
 
         #endregion
@@ -76,6 +96,42 @@ namespace HierarchyDesigner.Runtime
         {
             get => globalLineStyle;
             set => globalLineStyle = value;
+        }
+
+        /// <summary>
+        /// Gets or sets whether to show nesting lines.
+        /// </summary>
+        public bool ShowNestingLines
+        {
+            get => showNestingLines;
+            set => showNestingLines = value;
+        }
+
+        /// <summary>
+        /// Gets or sets the nesting lines color.
+        /// </summary>
+        public Color NestingLinesColor
+        {
+            get => nestingLinesColor;
+            set => nestingLinesColor = value;
+        }
+
+        /// <summary>
+        /// Gets or sets whether to show component quick-icons.
+        /// </summary>
+        public bool ShowComponentIcons
+        {
+            get => showComponentIcons;
+            set => showComponentIcons = value;
+        }
+
+        /// <summary>
+        /// Gets or sets whether to show child count badges.
+        /// </summary>
+        public bool ShowChildCountBadges
+        {
+            get => showChildCountBadges;
+            set => showChildCountBadges = value;
         }
 
         #endregion

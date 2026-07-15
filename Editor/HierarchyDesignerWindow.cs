@@ -19,6 +19,10 @@ namespace HierarchyDesigner.Editor
         private SerializedProperty headersProperty;
         private SerializedProperty globalLineColorProperty;
         private SerializedProperty globalLineStyleProperty;
+        private SerializedProperty showNestingLinesProperty;
+        private SerializedProperty nestingLinesColorProperty;
+        private SerializedProperty showComponentIconsProperty;
+        private SerializedProperty showChildCountBadgesProperty;
         private ReorderableList headerList;
         private Vector2 scrollPosition;
 
@@ -74,7 +78,7 @@ namespace HierarchyDesigner.Editor
             EditorGUILayout.EndScrollView();
 
             // Global Line and Color styling section highlighted in red above "+ Add Section" button
-            DrawGlobalLineSettings();
+            DrawGlobalSettings();
 
             // Controls & Modify Actions Panel
             DrawReorderingControls();
@@ -102,6 +106,10 @@ namespace HierarchyDesigner.Editor
                 headersProperty = serializedDatabase.FindProperty("headers");
                 globalLineColorProperty = serializedDatabase.FindProperty("globalLineColor");
                 globalLineStyleProperty = serializedDatabase.FindProperty("globalLineStyle");
+                showNestingLinesProperty = serializedDatabase.FindProperty("showNestingLines");
+                nestingLinesColorProperty = serializedDatabase.FindProperty("nestingLinesColor");
+                showComponentIconsProperty = serializedDatabase.FindProperty("showComponentIcons");
+                showChildCountBadgesProperty = serializedDatabase.FindProperty("showChildCountBadges");
                 SetupReorderableList();
             }
         }
@@ -186,19 +194,31 @@ namespace HierarchyDesigner.Editor
             GUILayout.EndVertical();
         }
 
-        private void DrawGlobalLineSettings()
+        private void DrawGlobalSettings()
         {
             if (serializedDatabase == null || globalLineColorProperty == null || globalLineStyleProperty == null) return;
 
             GUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Label("Global Separator Styling", EditorStyles.boldLabel);
+            GUILayout.Label("Global Separation & Styling Settings", EditorStyles.boldLabel);
             
             GUILayout.BeginHorizontal();
-            
             EditorGUILayout.PropertyField(globalLineColorProperty, new GUIContent("Line Color"));
             EditorGUILayout.PropertyField(globalLineStyleProperty, new GUIContent("Line Style"));
-
             GUILayout.EndHorizontal();
+
+            GUILayout.Space(4);
+            GUILayout.Label("Feature Toggles & Configurations", EditorStyles.boldLabel);
+            
+            GUILayout.BeginHorizontal();
+            EditorGUILayout.PropertyField(showNestingLinesProperty, new GUIContent("Nesting Lines"));
+            EditorGUILayout.PropertyField(nestingLinesColorProperty, new GUIContent("Nesting Color"));
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            EditorGUILayout.PropertyField(showComponentIconsProperty, new GUIContent("Component Icons"));
+            EditorGUILayout.PropertyField(showChildCountBadgesProperty, new GUIContent("Child Counts"));
+            GUILayout.EndHorizontal();
+
             GUILayout.Space(4);
             GUILayout.EndVertical();
             GUILayout.Space(2);

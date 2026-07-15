@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -6,8 +7,8 @@ using HierarchyDesigner.Runtime;
 namespace HierarchyDesigner.Editor
 {
     /// <summary>
-    /// Intercepts Hierarchy Window GUI drawing events and custom renders GameObjects
-    /// containing the <see cref="HierarchyHeader"/> component.
+    /// Intercepts Hierarchy Window GUI drawing events and custom renders GameObjects,
+    /// adding breadcrumb tree lines, component icons, and child count badges.
     /// </summary>
     [InitializeOnLoad]
     public static class HierarchyDrawer
@@ -16,6 +17,10 @@ namespace HierarchyDesigner.Editor
 
         private static HierarchyDatabase cachedDatabase;
         private static readonly Dictionary<string, HierarchyHeaderData> HeaderCache = new Dictionary<string, HierarchyHeaderData>();
+        
+        // Caches for textures to ensure fast rendering
+        private static readonly Dictionary<Color, Texture2D> GradientTextureCache = new Dictionary<Color, Texture2D>();
+        private static readonly Dictionary<Color, Texture2D> PillTextureCache = new Dictionary<Color, Texture2D>();
 
         #endregion
 
@@ -60,40 +65,60 @@ namespace HierarchyDesigner.Editor
         /// </summary>
         private static void OnHierarchyWindowItemGUI(int instanceID, Rect selectionRect)
         {
-            // Only draw on Repaint to avoid drawing during input and layout events
-            if (Event.current.type != EventType.Repaint) return;
-
-            // Retrieve GameObject using instance ID
             GameObject go = EditorUtility.InstanceIDToObject(instanceID) as GameObject;
             if (go == null) return;
 
-            // Check if it is a hierarchy header
-            if (go.TryGetComponent(out HierarchyHeader header))
+            // Load database if not already loaded
+            if (cachedDatabase == null)
             {
-                if (string.IsNullOrEmpty(header.Guid)) return;
+                cachedDatabase = HierarchyUtility.GetOrCreateDatabase();
+            }
 
-                // Attempt to find layout configurations
-                if (HeaderCache.TryGetValue(header.Guid, out HierarchyHeaderData data))
+            // Check if it is a hierarchy header
+            bool isHeader = go.TryGetComponent(out HierarchyHeader header);
+            HierarchyHeaderData headerData = null;
+            if (isHeader && !string.IsNullOrEmpty(header.Guid))
+            {
+                HeaderCache.TryGetValue(header.Guid, out headerData);
+            }
+
+            // Only draw on Repaint to avoid drawing during input and layout events
+            if (Event.current.type != EventType.Repaint) return;
+
+            // Render Custom Headers
+            if (isHeader && headerData != null)
+            {
+                DrawHeader(selectionRect, go, headerData);
+            }
+            else
+            {
+                // Render Nesting Lines
+                if (cachedDatabase != null && cachedDatabase.ShowNestingLines)
                 {
-                    DrawHeader(selectionRect, go, data);
+                    DrawNestingLines(selectionRect, go, cachedDatabase.NestingLinesColor);
                 }
+
+                // Render Right-Aligned Features (Component Icons and Child Count Badges)
+                DrawRightSideFeatures(selectionRect, go);
             }
         }
 
         /// <summary>
-        /// Performs custom drawing over the default hierarchy item row.
+        /// Performs custom drawing over the default hierarchy item row for headers.
         /// </summary>
         private static void DrawHeader(Rect rect, GameObject go, HierarchyHeaderData data)
         {
-            // Calculate a background rect spanning the full row width, fitting exactly within the row height to prevent overlapping
+            float headerH = rect.height - .5f;
+
+            // Calculate a background rect spanning the full row width
             Rect bgRect = new Rect(
                 rect.xMin - HierarchyStyles.LeftOffset,
                 rect.y,
                 rect.width + HierarchyStyles.LeftOffset + 16f,
-                rect.height -.5f
+                headerH
             );
 
-            // Erase the default text by drawing a solid base color matching the editor theme selection state
+            // Draw editor background color first to clean up default text and handle rounded corners
             bool isSelected = Selection.activeGameObject == go;
             Color baseBgColor = EditorGUIUtility.isProSkin ? new Color(0.22f, 0.22f, 0.22f, 1f) : new Color(0.78f, 0.78f, 0.78f, 1f);
             if (isSelected)
@@ -102,64 +127,305 @@ namespace HierarchyDesigner.Editor
             }
             EditorGUI.DrawRect(bgRect, baseBgColor);
 
-            // Draw custom background using the configured color from the database (potentially with transparency)
-            EditorGUI.DrawRect(bgRect, data.Color);
+            // Draw glossy gradient background
+            Texture2D gradientTex = GetOrCreateGradientTexture(data.Color);
+            if (gradientTex != null)
+            {
+                GUI.DrawTexture(bgRect, gradientTex, ScaleMode.StretchToFill);
+            }
 
-            // Draw selection highlight frame if the item is selected
+            // Draw selection highlight frame overlay if selected
             if (isSelected)
             {
-                // Soft overlay indicating selection
                 EditorGUI.DrawRect(bgRect, new Color(0.24f, 0.48f, 0.9f, 0.25f));
             }
 
-            // Draw left-aligned name label inside the background banner
-            GUIStyle labelStyle = HierarchyStyles.HeaderLabelStyle;
-            Rect labelRect = new Rect(
-                bgRect.xMin + 5f,
-                bgRect.y,
-                bgRect.width - 10f,
-                bgRect.height
-            );
+            // Styling labels
+            GUIStyle titleStyle = new GUIStyle(HierarchyStyles.HeaderLabelStyle);
+            Rect labelRect = new Rect(bgRect.xMin + 8f, bgRect.y, bgRect.width - 40f, bgRect.height);
 
-            // Draw shadow for depth
-            Rect shadowRect = new Rect(labelRect.x + 1f, labelRect.y + 1f, labelRect.width, labelRect.height);
-            GUIStyle shadowStyle = new GUIStyle(labelStyle);
-            shadowStyle.normal.textColor = new Color(0f, 0f, 0f, 0.5f);
-            GUI.Label(shadowRect, data.HeaderName, shadowStyle);
+            // Draw title shadow
+            titleStyle.normal.textColor = new Color(0f, 0f, 0f, 0.5f);
+            GUI.Label(new Rect(labelRect.x + 1f, labelRect.y + 1f, labelRect.width, labelRect.height), data.HeaderName, titleStyle);
+            titleStyle.normal.textColor = Color.white;
+            GUI.Label(labelRect, data.HeaderName, titleStyle);
 
-            GUI.Label(labelRect, data.HeaderName, labelStyle);
-
-            if (cachedDatabase == null)
+            // Draw child count badge on headers too if they have children
+            if (cachedDatabase != null && cachedDatabase.ShowChildCountBadges && go.transform.childCount > 0)
             {
-                cachedDatabase = HierarchyUtility.GetOrCreateDatabase();
+                float badgeX = bgRect.xMax - 30f;
+                DrawChildCountBadge(new Rect(badgeX, bgRect.y, 30f, bgRect.height), go.transform.childCount);
             }
 
+            // Draw line dividers
             Color lineColor = cachedDatabase != null ? cachedDatabase.GlobalLineColor : Color.white;
             HierarchyLineStyle lineStyle = cachedDatabase != null ? cachedDatabase.GlobalLineStyle : HierarchyLineStyle.Solid;
 
-            // Draw top framing line
             float topHeight = lineStyle == HierarchyLineStyle.Double ? 3f : HierarchyStyles.SeparatorHeight;
-            Rect topSeparatorRect = new Rect(
-                bgRect.xMin,
-                bgRect.yMin,
-                bgRect.width,
-                topHeight
-            );
+            Rect topSeparatorRect = new Rect(bgRect.xMin, bgRect.yMin, bgRect.width, topHeight);
             DrawSeparatorLine(topSeparatorRect, lineColor, lineStyle);
 
-            // Draw bottom framing line
             float bottomHeight = lineStyle == HierarchyLineStyle.Double ? 3f : HierarchyStyles.SeparatorHeight;
-            Rect bottomSeparatorRect = new Rect(
-                bgRect.xMin,
-                bgRect.yMax - bottomHeight,
-                bgRect.width,
-                bottomHeight
-            );
+            Rect bottomSeparatorRect = new Rect(bgRect.xMin, bgRect.yMax - bottomHeight, bgRect.width, bottomHeight);
             DrawSeparatorLine(bottomSeparatorRect, lineColor, lineStyle);
         }
 
         /// <summary>
-        /// Draws a separator line using the specified style and color.
+        /// Draws the nesting connection lines (breadcrumbs).
+        /// </summary>
+        private static void DrawNestingLines(Rect rect, GameObject go, Color lineColor)
+        {
+            Transform t = go.transform;
+            if (t.parent == null) return;
+
+            // Collect ancestors up to root
+            List<Transform> ancestors = new List<Transform>();
+            Transform curr = t.parent;
+            while (curr != null)
+            {
+                ancestors.Insert(0, curr);
+                curr = curr.parent;
+            }
+
+            int depth = ancestors.Count;
+            float indent = 14f;
+            
+            // Re-calculate the root visual X position
+            float rootX = rect.x - indent * depth;
+            float lineOffset = -10f; // Alignment offset for foldouts
+
+            for (int i = 0; i < depth; i++)
+            {
+                float lineX = rootX + i * indent + lineOffset;
+
+                if (i < depth - 1)
+                {
+                    // Vertical lines running through ancestor slots
+                    bool isLast = false;
+                    if (ancestors[i].parent != null)
+                    {
+                        int siblingCount = ancestors[i].parent.childCount;
+                        isLast = ancestors[i].parent.GetChild(siblingCount - 1) == ancestors[i];
+                    }
+                    else
+                    {
+                        var rootObjects = go.scene.GetRootGameObjects();
+                        if (rootObjects.Length > 0)
+                        {
+                            isLast = rootObjects[rootObjects.Length - 1] == ancestors[i].gameObject;
+                        }
+                    }
+
+                    if (!isLast)
+                    {
+                        Rect lineRect = new Rect(lineX, rect.y, 1f, rect.height);
+                        EditorGUI.DrawRect(lineRect, lineColor);
+                    }
+                }
+                else
+                {
+                    // Connector line for the immediate parent
+                    bool isLastChild = t.parent.GetChild(t.parent.childCount - 1) == t;
+                    float yMax = isLastChild ? rect.y + rect.height * 0.5f : rect.y + rect.height;
+
+                    Rect vLineRect = new Rect(lineX, rect.y, 1f, yMax - rect.y);
+                    EditorGUI.DrawRect(vLineRect, lineColor);
+
+                    float branchLength = 8f;
+                    Rect hLineRect = new Rect(lineX, rect.y + rect.height * 0.5f, branchLength, 1f);
+                    EditorGUI.DrawRect(hLineRect, lineColor);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handles visual rendering of the filtered component icons and badges.
+        /// </summary>
+        private static void DrawRightSideFeatures(Rect rect, GameObject go)
+        {
+            float currentX = rect.xMax - 6f;
+
+            // Calculate label width to prevent icon overlap on short hierarchy windows
+            float labelWidth = EditorStyles.label.CalcSize(new GUIContent(go.name)).x;
+            float limitX = rect.x + labelWidth + 16f; // Leftmost bound for icon drawing
+
+            // 1. Draw Child Count Badge
+            if (cachedDatabase != null && cachedDatabase.ShowChildCountBadges && go.transform.childCount > 0)
+            {
+                int count = go.transform.childCount;
+                string text = count.ToString();
+
+                GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontStyle = FontStyle.Bold,
+                    normal = { textColor = new Color(0.95f, 0.72f, 0.2f) }
+                };
+                Vector2 size = labelStyle.CalcSize(new GUIContent(text));
+                float badgeW = Mathf.Max(18f, size.x + 8f);
+                float badgeH = 13f;
+
+                if (currentX - badgeW >= limitX)
+                {
+                    Rect badgeRect = new Rect(currentX - badgeW, rect.y + (rect.height - badgeH) * 0.5f, badgeW, badgeH);
+                    DrawChildCountBadge(badgeRect, count);
+                    currentX -= badgeW + 6f;
+                }
+            }
+
+            // 2. Draw Filtered Component Icons (Only Collider, Renderer, and custom Scripts)
+            if (cachedDatabase != null && cachedDatabase.ShowComponentIcons)
+            {
+                Component[] comps = go.GetComponents<Component>();
+                int drawnCount = 0;
+                for (int i = 0; i < comps.Length; i++)
+                {
+                    Component comp = comps[i];
+                    if (comp == null || comp is Transform || comp is HierarchyHeader) continue;
+
+                    // Filter components specifically: Colliders, Renderers, and Scripts
+                    bool isCollider = comp is Collider || comp is Collider2D;
+                    bool isRenderer = comp is Renderer;
+                    bool isScript = comp is MonoBehaviour;
+
+                    if (isCollider || isRenderer || isScript)
+                    {
+                        if (drawnCount >= 5) break;
+
+                        if (currentX - 14f < limitX) break; // Prevent icons from drawing on top of GameObject name
+
+                        Texture2D compIcon = EditorGUIUtility.ObjectContent(null, comp.GetType()).image as Texture2D;
+                        if (compIcon != null)
+                        {
+                            Rect iconRect = new Rect(currentX - 14f, rect.y + (rect.height - 14f) * 0.5f, 14f, 14f);
+                            GUI.DrawTexture(iconRect, compIcon);
+                            currentX -= 16f;
+                            drawnCount++;
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void DrawChildCountBadge(Rect rect, int count)
+        {
+            Color bgColor = new Color(0.15f, 0.15f, 0.15f, 0.85f);
+            Texture2D pillTex = GetOrCreatePillTexture(bgColor);
+            if (pillTex != null)
+            {
+                GUI.DrawTexture(rect, pillTex, ScaleMode.StretchToFill);
+            }
+
+            GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = new Color(0.95f, 0.72f, 0.2f) }
+            };
+            GUI.Label(rect, count.ToString(), labelStyle);
+        }
+
+        /// <summary>
+        /// Generates or loads a cached gradient background texture.
+        /// </summary>
+        private static Texture2D GetOrCreateGradientTexture(Color baseColor)
+        {
+            if (GradientTextureCache.TryGetValue(baseColor, out Texture2D tex) && tex != null)
+            {
+                return tex;
+            }
+
+            int width = 256;
+            int height = 32;
+            tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            int radius = 4;
+
+            for (int y = 0; y < height; y++)
+            {
+                float tY = (float)y / height;
+                for (int x = 0; x < width; x++)
+                {
+                    float tX = (float)x / width;
+
+                    // Left to Right gradient
+                    Color col = Color.Lerp(baseColor, baseColor * 0.45f, tX);
+                    col.a = baseColor.a;
+
+                    // Soft gloss highlight overlay
+                    if (tY > 0.4f)
+                    {
+                        float gloss = (tY - 0.4f) / 0.6f;
+                        col = Color.Lerp(col, Color.white, gloss * 0.12f);
+                    }
+
+                    // Bottom ambient drop shadow edge
+                    if (tY < 0.1f)
+                    {
+                        col = Color.Lerp(col, Color.black, (0.1f - tY) * 5f * 0.25f);
+                    }
+
+                    // Anti-aliased corner masking
+                    bool mask = false;
+                    if (x < radius && y < radius)
+                    {
+                        if ((x - radius) * (x - radius) + (y - radius) * (y - radius) > radius * radius) mask = true;
+                    }
+                    else if (x < radius && y >= height - radius)
+                    {
+                        if ((x - radius) * (x - radius) + (y - (height - radius)) * (y - (height - radius)) > radius * radius) mask = true;
+                    }
+                    else if (x >= width - radius && y < radius)
+                    {
+                        if ((x - (width - radius)) * (x - (width - radius)) + (y - radius) * (y - radius) > radius * radius) mask = true;
+                    }
+                    else if (x >= width - radius && y >= height - radius)
+                    {
+                        if ((x - (width - radius)) * (x - (width - radius)) + (y - (height - radius)) * (y - (height - radius)) > radius * radius) mask = true;
+                    }
+
+                    tex.SetPixel(x, y, mask ? Color.clear : col);
+                }
+            }
+            tex.Apply();
+            GradientTextureCache[baseColor] = tex;
+            return tex;
+        }
+
+        /// <summary>
+        /// Generates or loads a cached pill-shaped texture.
+        /// </summary>
+        private static Texture2D GetOrCreatePillTexture(Color color)
+        {
+            if (PillTextureCache.TryGetValue(color, out Texture2D tex) && tex != null)
+            {
+                return tex;
+            }
+
+            int width = 32;
+            int height = 16;
+            tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            int radius = 6;
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    bool mask = false;
+                    if (x < radius && y < radius && (x - radius) * (x - radius) + (y - radius) * (y - radius) > radius * radius) mask = true;
+                    else if (x < radius && y >= height - radius && (x - radius) * (x - radius) + (y - (height - radius)) * (y - (height - radius)) > radius * radius) mask = true;
+                    else if (x >= width - radius && y < radius && (x - (width - radius)) * (x - (width - radius)) + (y - radius) * (y - radius) > radius * radius) mask = true;
+                    else if (x >= width - radius && y >= height - radius && (x - (width - radius)) * (x - (width - radius)) + (y - (height - radius)) * (y - (height - radius)) > radius * radius) mask = true;
+
+                    tex.SetPixel(x, y, mask ? Color.clear : color);
+                }
+            }
+            tex.Apply();
+            PillTextureCache[color] = tex;
+            return tex;
+        }
+
+        /// <summary>
+        /// Helper to draw header separators.
         /// </summary>
         private static void DrawSeparatorLine(Rect rect, Color color, HierarchyLineStyle style)
         {
@@ -184,7 +450,7 @@ namespace HierarchyDesigner.Editor
             }
             else if (style == HierarchyLineStyle.Dotted)
             {
-                float dotLength = rect.height; // Square dot matching height
+                float dotLength = rect.height;
                 float gapLength = 3f;
                 float currentX = rect.x;
                 float endX = rect.xMax;
@@ -197,7 +463,6 @@ namespace HierarchyDesigner.Editor
             }
             else if (style == HierarchyLineStyle.Double)
             {
-                // Draw a top thin line and a bottom thin line with a gap in the middle
                 float lineThickness = Mathf.Max(0.5f, rect.height * 0.35f);
                 EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, lineThickness), color);
                 EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - lineThickness, rect.width, lineThickness), color);
