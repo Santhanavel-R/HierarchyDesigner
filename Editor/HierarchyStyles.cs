@@ -1,49 +1,25 @@
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace HierarchyDesigner.Editor
 {
     /// <summary>
-    /// Static class defining the styling and visual parameters for drawing hierarchy headers.
+    /// Constants and GUIStyles used in custom drawing and settings panels.
     /// </summary>
     public static class HierarchyStyles
     {
         #region Constants
 
-        /// <summary>
-        /// Total height of the visual hierarchy header row.
-        /// </summary>
-        public const float HeaderHeight = 50f;
-
-        /// <summary>
-        /// Height of the separator line drawn below the text or at the bottom.
-        /// </summary>
-        public const float SeparatorHeight = 1.5f;
-
-        /// <summary>
-        /// Left padding offset to account for default hierarchy folding arrows and depth indent.
-        /// </summary>
+        public const float HeaderHeight = 22f;
+        public const float SeparatorHeight = 1f;
         public const float LeftOffset = 18f;
-
-        /// <summary>
-        /// Left offset specifically for drawing the icon.
-        /// </summary>
         public const float IconLeftOffset = 32f;
-
-        /// <summary>
-        /// Width and height of the icon.
-        /// </summary>
         public const float IconSize = 16f;
-
-        /// <summary>
-        /// Inner padding for text drawing.
-        /// </summary>
         public const float TextLeftOffset = 52f;
 
         #endregion
 
-        #region Fields
+        #region Custom Styles
 
         private static GUIStyle headerLabelStyle;
 
@@ -52,7 +28,7 @@ namespace HierarchyDesigner.Editor
         #region Properties
 
         /// <summary>
-        /// Gets the GUIStyle used to draw the header text.
+        /// Style used to draw custom header text.
         /// </summary>
         public static GUIStyle HeaderLabelStyle
         {
@@ -63,7 +39,7 @@ namespace HierarchyDesigner.Editor
                     headerLabelStyle = new GUIStyle(EditorStyles.whiteBoldLabel)
                     {
                         alignment = TextAnchor.MiddleLeft,
-                        fontSize = 10,
+                        fontSize = 11,
                         fontStyle = FontStyle.Bold
                     };
                     headerLabelStyle.normal.textColor = Color.white;
@@ -72,10 +48,7 @@ namespace HierarchyDesigner.Editor
             }
         }
 
-        /// <summary>
-        /// Gets the color used for drawing the separator lines, adapting dynamically to the dark or light skin theme.
-        /// </summary>
-        public static Color SeparatorColor => Color.black; // Subtle dark-grey line in Light skin;
+        public static Color SeparatorColor => EditorGUIUtility.isProSkin ? new Color(0.12f, 0.12f, 0.12f, 1f) : new Color(0.7f, 0.7f, 0.7f, 1f);
 
         #endregion
     }

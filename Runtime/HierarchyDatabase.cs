@@ -1,18 +1,20 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace HierarchyDesigner.Runtime
 {
     /// <summary>
-    /// ScriptableObject database that stores all hierarchy section header configurations.
+    /// Configuration database storing custom hierarchy headers, line styles,
+    /// visual feature toggles, and centralized visual themes.
     /// </summary>
-    [CreateAssetMenu(fileName = "HierarchyLayout", menuName = "Hierarchy Designer/Hierarchy Layout Database", order = 120)]
+    [CreateAssetMenu(fileName = "HierarchyDatabase", menuName = "Hierarchy Designer/Layout Database", order = 1)]
     public class HierarchyDatabase : ScriptableObject
     {
-        #region Fields
+        #region Serialized Fields
 
         [SerializeField]
-        [Tooltip("The list of registered hierarchy section headers.")]
+        [Tooltip("The list of hierarchy header configurations.")]
         private List<HierarchyHeaderData> headers = new List<HierarchyHeaderData>();
 
         [SerializeField]
@@ -24,20 +26,36 @@ namespace HierarchyDesigner.Runtime
         private HierarchyLineStyle globalLineStyle = HierarchyLineStyle.Solid;
 
         [SerializeField]
-        [Tooltip("Toggle drawing of nesting connection tree lines (breadcrumbs).")]
+        [Tooltip("Toggle drawing of nesting guide lines in the hierarchy view.")]
         private bool showNestingLines = true;
 
         [SerializeField]
-        [Tooltip("The color for hierarchy tree connection lines.")]
-        private Color nestingLinesColor = new Color(1f, 1f, 1f, 0.18f);
+        [Tooltip("Color of the nesting guide lines.")]
+        private Color nestingLinesColor = new Color(0.7f, 0.7f, 0.7f, 0.55f);
 
         [SerializeField]
-        [Tooltip("Toggle drawing of component quick-icons on the right.")]
+        [Tooltip("Toggle drawing of quick component icons.")]
         private bool showComponentIcons = true;
 
         [SerializeField]
         [Tooltip("Toggle drawing of child count badges on parent GameObjects.")]
         private bool showChildCountBadges = true;
+
+        [SerializeField]
+        [Tooltip("The index of the selected color theme.")]
+        private int activeThemeIndex = 0; // Default to Studio Pro
+
+        [SerializeField]
+        [Tooltip("Toggle rainbow color nesting lines.")]
+        private bool useRainbowNesting = true;
+
+        [SerializeField]
+        [Tooltip("Toggle rendering a thin visual border around selected/hovered GameObjects.")]
+        private bool showGameObjectBorder = true;
+
+        [SerializeField]
+        [Tooltip("The list of built-in and custom visual themes.")]
+        private List<HierarchyThemeData> themes = new List<HierarchyThemeData>();
 
         #endregion
 
@@ -50,21 +68,25 @@ namespace HierarchyDesigner.Runtime
         {
             headers = new List<HierarchyHeaderData>
             {
-                new HierarchyHeaderData("🎮 XR", new Color(0.12f, 0.45f, 0.6f, 0.85f)),
-                new HierarchyHeaderData("🖥 UI", new Color(0.55f, 0.25f, 0.7f, 0.85f)),
-                new HierarchyHeaderData("🔊 AUDIO", new Color(0.1f, 0.55f, 0.55f, 0.85f)),
-                new HierarchyHeaderData("🌍 ENVIRONMENT", new Color(0.15f, 0.5f, 0.25f, 0.85f)),
-                new HierarchyHeaderData("🎯 INTERACTABLES", new Color(0.85f, 0.35f, 0.1f, 0.85f)),
-                new HierarchyHeaderData("✨ EFFECTS", new Color(0.8f, 0.6f, 0.1f, 0.85f)),
-                new HierarchyHeaderData("⚙ Managers", new Color(0.35f, 0.35f, 0.35f, 0.85f)),
-                new HierarchyHeaderData("🐞 DEBUG", new Color(0.75f, 0.2f, 0.2f, 0.85f))
+                new HierarchyHeaderData("🎮 XR", new Color(0.25f, 0.48f, 0.85f, 0.85f)),
+                new HierarchyHeaderData("🖥 UI", new Color(0.42f, 0.44f, 0.9f, 0.85f)),
+                new HierarchyHeaderData("🔊 AUDIO", new Color(0.05f, 0.6f, 0.7f, 0.85f)),
+                new HierarchyHeaderData("🌍 ENVIRONMENT", new Color(0.1f, 0.58f, 0.4f, 0.85f)),
+                new HierarchyHeaderData("🎯 INTERACTABLES", new Color(0.85f, 0.58f, 0.1f, 0.85f)),
+                new HierarchyHeaderData("✨ EFFECTS", new Color(0.8f, 0.65f, 0.1f, 0.85f)),
+                new HierarchyHeaderData("⚙ Managers", new Color(0.35f, 0.38f, 0.42f, 0.85f)),
+                new HierarchyHeaderData("🐞 DEBUG", new Color(0.82f, 0.28f, 0.28f, 0.85f))
             };
             globalLineColor = Color.white;
             globalLineStyle = HierarchyLineStyle.Solid;
             showNestingLines = true;
-            nestingLinesColor = new Color(1f, 1f, 1f, 0.18f);
+            nestingLinesColor = new Color(0.7f, 0.7f, 0.7f, 0.55f);
             showComponentIcons = true;
             showChildCountBadges = true;
+            useRainbowNesting = true;
+            showGameObjectBorder = true;
+            activeThemeIndex = 0;
+            InitializeDefaultThemes();
         }
 
         #endregion
@@ -132,6 +154,166 @@ namespace HierarchyDesigner.Runtime
         {
             get => showChildCountBadges;
             set => showChildCountBadges = value;
+        }
+
+        /// <summary>
+        /// Gets or sets the active color theme index.
+        /// </summary>
+        public int ActiveThemeIndex
+        {
+            get => activeThemeIndex;
+            set => activeThemeIndex = value;
+        }
+
+        /// <summary>
+        /// Gets or sets whether to use rainbow colors for nesting guide lines.
+        /// </summary>
+        public bool UseRainbowNesting
+        {
+            get => useRainbowNesting;
+            set => useRainbowNesting = value;
+        }
+
+        /// <summary>
+        /// Gets or sets whether to show borders around selected/hovered GameObjects.
+        /// </summary>
+        public bool ShowGameObjectBorder
+        {
+            get => showGameObjectBorder;
+            set => showGameObjectBorder = value;
+        }
+
+        /// <summary>
+        /// Gets or sets the list of visual themes.
+        /// </summary>
+        public List<HierarchyThemeData> Themes
+        {
+            get => themes;
+            set => themes = value;
+        }
+
+        #endregion
+
+        #region Theme Methods
+
+        public HierarchyThemeData GetActiveTheme()
+        {
+            if (themes == null || themes.Count == 0)
+            {
+                InitializeDefaultThemes();
+            }
+            int index = Mathf.Clamp(activeThemeIndex, 0, themes.Count - 1);
+            return themes[index];
+        }
+
+        public void InitializeDefaultThemes()
+        {
+            themes = new List<HierarchyThemeData>();
+
+            // 1. Studio Pro (Default)
+            HierarchyThemeData t1 = new HierarchyThemeData("Studio Pro");
+            t1.xrColor = new Color(0.25f, 0.48f, 0.85f);
+            t1.uiColor = new Color(0.42f, 0.44f, 0.9f);
+            t1.audioColor = new Color(0.05f, 0.6f, 0.7f);
+            t1.envColor = new Color(0.1f, 0.58f, 0.4f);
+            t1.interactColor = new Color(0.85f, 0.58f, 0.1f);
+            t1.effectsColor = new Color(0.8f, 0.65f, 0.1f);
+            t1.managersColor = new Color(0.35f, 0.38f, 0.42f);
+            t1.debugColor = new Color(0.82f, 0.28f, 0.28f);
+            t1.headerGradientColor = new Color(0.12f, 0.12f, 0.12f, 0.7f);
+            t1.borderColor = new Color(0.4f, 0.4f, 0.4f, 0.45f);
+            t1.separatorLineColor = new Color(0.6f, 0.6f, 0.6f, 0.4f);
+            t1.treeLineColor = new Color(0.7f, 0.7f, 0.7f, 0.55f);
+            t1.badgeBackgroundColor = new Color(0.18f, 0.18f, 0.18f, 0.85f);
+            t1.badgeTextColor = Color.white;
+            t1.iconAccentColor = new Color(0.8f, 0.8f, 0.8f);
+            t1.hoverOverlayColor = new Color(1f, 1f, 1f, 0.08f);
+            t1.selectionOverlayColor = new Color(0.25f, 0.48f, 0.85f, 0.25f);
+            themes.Add(t1);
+
+            // 2. Aqua Flow
+            HierarchyThemeData t2 = new HierarchyThemeData("Aqua Flow");
+            t2.xrColor = new Color(0.18f, 0.35f, 0.75f);
+            t2.uiColor = new Color(0.12f, 0.58f, 0.82f);
+            t2.audioColor = new Color(0.16f, 0.65f, 0.48f);
+            t2.envColor = new Color(0.1f, 0.62f, 0.58f);
+            t2.interactColor = new Color(0.85f, 0.48f, 0.22f);
+            t2.effectsColor = new Color(0.88f, 0.72f, 0.15f);
+            t2.managersColor = new Color(0.32f, 0.4f, 0.48f);
+            t2.debugColor = new Color(0.78f, 0.22f, 0.22f);
+            t2.headerGradientColor = new Color(0.03f, 0.2f, 0.25f, 0.7f);
+            t2.borderColor = new Color(0.12f, 0.58f, 0.82f, 0.45f);
+            t2.separatorLineColor = new Color(0.1f, 0.62f, 0.58f, 0.4f);
+            t2.treeLineColor = new Color(0.1f, 0.62f, 0.58f, 0.55f);
+            t2.badgeBackgroundColor = new Color(0.05f, 0.15f, 0.2f, 0.85f);
+            t2.badgeTextColor = Color.white;
+            t2.iconAccentColor = new Color(0.4f, 0.85f, 0.95f);
+            t2.hoverOverlayColor = new Color(0.12f, 0.58f, 0.82f, 0.08f);
+            t2.selectionOverlayColor = new Color(0.1f, 0.62f, 0.58f, 0.25f);
+            themes.Add(t2);
+
+            // 3. Solar Fusion
+            HierarchyThemeData t3 = new HierarchyThemeData("Solar Fusion");
+            t3.xrColor = new Color(0.35f, 0.38f, 0.78f);
+            t3.uiColor = new Color(0.58f, 0.28f, 0.82f);
+            t3.audioColor = new Color(0.08f, 0.48f, 0.58f);
+            t3.envColor = new Color(0.18f, 0.52f, 0.28f);
+            t3.interactColor = new Color(0.82f, 0.32f, 0.08f);
+            t3.effectsColor = new Color(0.88f, 0.65f, 0.12f);
+            t3.managersColor = new Color(0.42f, 0.4f, 0.38f);
+            t3.debugColor = new Color(0.78f, 0.18f, 0.18f);
+            t3.headerGradientColor = new Color(0.25f, 0.1f, 0.03f, 0.7f);
+            t3.borderColor = new Color(0.82f, 0.32f, 0.08f, 0.45f);
+            t3.separatorLineColor = new Color(0.82f, 0.32f, 0.08f, 0.4f);
+            t3.treeLineColor = new Color(0.82f, 0.52f, 0.32f, 0.55f);
+            t3.badgeBackgroundColor = new Color(0.22f, 0.18f, 0.15f, 0.85f);
+            t3.badgeTextColor = Color.white;
+            t3.iconAccentColor = new Color(0.95f, 0.6f, 0.4f);
+            t3.hoverOverlayColor = new Color(0.88f, 0.65f, 0.12f, 0.08f);
+            t3.selectionOverlayColor = new Color(0.82f, 0.32f, 0.08f, 0.25f);
+            themes.Add(t3);
+
+            // 4. Cloud Light
+            HierarchyThemeData t4 = new HierarchyThemeData("Cloud Light");
+            t4.xrColor = new Color(0.48f, 0.68f, 0.92f);
+            t4.uiColor = new Color(0.68f, 0.58f, 0.92f);
+            t4.audioColor = new Color(0.48f, 0.82f, 0.88f);
+            t4.envColor = new Color(0.52f, 0.85f, 0.72f);
+            t4.interactColor = new Color(0.92f, 0.72f, 0.52f);
+            t4.effectsColor = new Color(0.92f, 0.85f, 0.58f);
+            t4.managersColor = new Color(0.58f, 0.62f, 0.65f);
+            t4.debugColor = new Color(0.92f, 0.52f, 0.52f);
+            t4.headerGradientColor = new Color(0.4f, 0.4f, 0.45f, 0.7f);
+            t4.borderColor = new Color(0.68f, 0.58f, 0.92f, 0.45f);
+            t4.separatorLineColor = new Color(0.8f, 0.8f, 0.8f, 0.35f);
+            t4.treeLineColor = new Color(0.68f, 0.58f, 0.92f, 0.45f);
+            t4.badgeBackgroundColor = new Color(0.32f, 0.3f, 0.35f, 0.85f);
+            t4.badgeTextColor = new Color(0.95f, 0.95f, 0.95f);
+            t4.iconAccentColor = new Color(0.75f, 0.7f, 0.95f);
+            t4.hoverOverlayColor = new Color(1f, 1f, 1f, 0.12f);
+            t4.selectionOverlayColor = new Color(0.68f, 0.58f, 0.92f, 0.2f);
+            themes.Add(t4);
+
+            // 5. Midnight Pro
+            HierarchyThemeData t5 = new HierarchyThemeData("Midnight Pro");
+            t5.xrColor = new Color(0.12f, 0.32f, 0.78f);
+            t5.uiColor = new Color(0.42f, 0.18f, 0.78f);
+            t5.audioColor = new Color(0.05f, 0.38f, 0.38f);
+            t5.envColor = new Color(0.08f, 0.42f, 0.22f);
+            t5.interactColor = new Color(0.68f, 0.22f, 0.05f);
+            t5.effectsColor = new Color(0.68f, 0.48f, 0.02f);
+            t5.managersColor = new Color(0.24f, 0.28f, 0.34f);
+            t5.debugColor = new Color(0.62f, 0.08f, 0.08f);
+            t5.headerGradientColor = new Color(0.08f, 0.08f, 0.12f, 0.8f);
+            t5.borderColor = new Color(0.2f, 0.2f, 0.2f, 0.55f);
+            t5.separatorLineColor = new Color(0.3f, 0.3f, 0.3f, 0.45f);
+            t5.treeLineColor = new Color(0.45f, 0.48f, 0.55f, 0.55f);
+            t5.badgeBackgroundColor = new Color(0.1f, 0.1f, 0.1f, 0.9f);
+            t5.badgeTextColor = Color.white;
+            t5.iconAccentColor = new Color(0.55f, 0.6f, 0.7f);
+            t5.hoverOverlayColor = new Color(1f, 1f, 1f, 0.05f);
+            t5.selectionOverlayColor = new Color(0.12f, 0.32f, 0.78f, 0.3f);
+            themes.Add(t5);
         }
 
         #endregion

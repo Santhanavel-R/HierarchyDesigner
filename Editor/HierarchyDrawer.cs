@@ -7,8 +7,8 @@ using HierarchyDesigner.Runtime;
 namespace HierarchyDesigner.Editor
 {
     /// <summary>
-    /// Intercepts Hierarchy Window GUI drawing events and custom renders GameObjects,
-    /// adding breadcrumb tree lines, component icons, and child count badges.
+    /// Intercepts Hierarchy Window GUI drawing events and custom renders visual elements,
+    /// dynamically fetching properties from the active selected theme preset.
     /// </summary>
     [InitializeOnLoad]
     public static class HierarchyDrawer
@@ -19,8 +19,19 @@ namespace HierarchyDesigner.Editor
         private static readonly Dictionary<string, HierarchyHeaderData> HeaderCache = new Dictionary<string, HierarchyHeaderData>();
         
         // Caches for textures to ensure fast rendering
-        private static readonly Dictionary<Color, Texture2D> GradientTextureCache = new Dictionary<Color, Texture2D>();
+        private static readonly Dictionary<string, Texture2D> GradientTextureCache = new Dictionary<string, Texture2D>();
         private static readonly Dictionary<Color, Texture2D> PillTextureCache = new Dictionary<Color, Texture2D>();
+
+        // Rainbow color sequence for nesting lines
+        private static readonly Color[] RainbowColors = new Color[]
+        {
+            new Color(0.9f, 0.3f, 0.3f, 0.35f),  // Muted Red
+            new Color(0.9f, 0.6f, 0.2f, 0.35f),  // Muted Orange
+            new Color(0.9f, 0.8f, 0.2f, 0.35f),  // Muted Yellow
+            new Color(0.3f, 0.8f, 0.4f, 0.35f),  // Muted Green
+            new Color(0.2f, 0.6f, 0.9f, 0.35f),  // Muted Blue
+            new Color(0.6f, 0.3f, 0.9f, 0.35f)   // Muted Violet
+        };
 
         #endregion
 
@@ -61,7 +72,7 @@ namespace HierarchyDesigner.Editor
         #region Private Methods
 
         /// <summary>
-        /// Event handler for hierarchy item drawing.
+        /// Event handler for hierarchy item drawing and inputs.
         /// </summary>
         private static void OnHierarchyWindowItemGUI(int instanceID, Rect selectionRect)
         {
@@ -82,13 +93,21 @@ namespace HierarchyDesigner.Editor
                 HeaderCache.TryGetValue(header.Guid, out headerData);
             }
 
+            // Repaint trigger to keep hover transitions responsive
+            if (Event.current.type == EventType.MouseMove)
+            {
+                EditorApplication.RepaintHierarchyWindow();
+            }
+
             // Only draw on Repaint to avoid drawing during input and layout events
             if (Event.current.type != EventType.Repaint) return;
+
+            HierarchyThemeData theme = (cachedDatabase != null) ? cachedDatabase.GetActiveTheme() : null;
 
             // Render Custom Headers
             if (isHeader && headerData != null)
             {
-                DrawHeader(selectionRect, go, headerData);
+                DrawHeader(selectionRect, go, headerData, theme);
             }
             else
             {
@@ -99,14 +118,37 @@ namespace HierarchyDesigner.Editor
                 }
 
                 // Render Right-Aligned Features (Component Icons and Child Count Badges)
-                DrawRightSideFeatures(selectionRect, go);
+                DrawRightSideFeatures(selectionRect, go, theme);
+
+                // Render selected or hovered GameObject row borders
+                if (cachedDatabase != null && cachedDatabase.ShowGameObjectBorder)
+                {
+                    bool isSelected = Selection.activeGameObject == go;
+                    bool isHoveredRow = selectionRect.Contains(Event.current.mousePosition);
+
+                    if (isSelected || isHoveredRow)
+                    {
+                        Color borderCol = isSelected
+                            ? (EditorGUIUtility.isProSkin ? new Color(0.24f, 0.48f, 0.9f, 0.6f) : new Color(0.24f, 0.48f, 0.9f, 0.8f))
+                            : (EditorGUIUtility.isProSkin ? new Color(1f, 1f, 1f, 0.15f) : new Color(0f, 0f, 0f, 0.15f));
+
+                        // Left border line
+                        EditorGUI.DrawRect(new Rect(selectionRect.xMin - HierarchyStyles.LeftOffset, selectionRect.y, 1f, selectionRect.height), borderCol);
+                        // Right border line
+                        EditorGUI.DrawRect(new Rect(selectionRect.xMax + 16f, selectionRect.y, 1f, selectionRect.height), borderCol);
+                        // Top border line
+                        EditorGUI.DrawRect(new Rect(selectionRect.xMin - HierarchyStyles.LeftOffset, selectionRect.y, selectionRect.width + HierarchyStyles.LeftOffset + 16f, 1f), borderCol);
+                        // Bottom border line
+                        EditorGUI.DrawRect(new Rect(selectionRect.xMin - HierarchyStyles.LeftOffset, selectionRect.yMax - 1f, selectionRect.width + HierarchyStyles.LeftOffset + 16f, 1f), borderCol);
+                    }
+                }
             }
         }
 
         /// <summary>
         /// Performs custom drawing over the default hierarchy item row for headers.
         /// </summary>
-        private static void DrawHeader(Rect rect, GameObject go, HierarchyHeaderData data)
+        private static void DrawHeader(Rect rect, GameObject go, HierarchyHeaderData data, HierarchyThemeData theme)
         {
             float headerH = rect.height - .5f;
 
@@ -127,8 +169,12 @@ namespace HierarchyDesigner.Editor
             }
             EditorGUI.DrawRect(bgRect, baseBgColor);
 
+            // Fetch theme base color
+            Color headerBaseColor = (theme != null) ? GetHeaderColorForTheme(data.HeaderName, theme, data.Color) : data.Color;
+            Color headerGradientColor = (theme != null) ? theme.headerGradientColor : headerBaseColor * 0.65f;
+
             // Draw glossy gradient background
-            Texture2D gradientTex = GetOrCreateGradientTexture(data.Color);
+            Texture2D gradientTex = GetOrCreateGradientTexture(headerBaseColor, headerGradientColor, theme);
             if (gradientTex != null)
             {
                 GUI.DrawTexture(bgRect, gradientTex, ScaleMode.StretchToFill);
@@ -137,7 +183,8 @@ namespace HierarchyDesigner.Editor
             // Draw selection highlight frame overlay if selected
             if (isSelected)
             {
-                EditorGUI.DrawRect(bgRect, new Color(0.24f, 0.48f, 0.9f, 0.25f));
+                Color selectionCol = new Color(0.24f, 0.48f, 0.9f, 0.25f);
+                EditorGUI.DrawRect(bgRect, selectionCol);
             }
 
             // Styling labels
@@ -194,9 +241,12 @@ namespace HierarchyDesigner.Editor
             float rootX = rect.x - indent * depth;
             float lineOffset = -10f; // Alignment offset for foldouts
 
+            bool useRainbow = cachedDatabase != null && cachedDatabase.UseRainbowNesting;
+
             for (int i = 0; i < depth; i++)
             {
                 float lineX = rootX + i * indent + lineOffset;
+                Color segmentColor = useRainbow ? RainbowColors[i % RainbowColors.Length] : lineColor;
 
                 if (i < depth - 1)
                 {
@@ -219,7 +269,7 @@ namespace HierarchyDesigner.Editor
                     if (!isLast)
                     {
                         Rect lineRect = new Rect(lineX, rect.y, 1f, rect.height);
-                        EditorGUI.DrawRect(lineRect, lineColor);
+                        EditorGUI.DrawRect(lineRect, segmentColor);
                     }
                 }
                 else
@@ -229,11 +279,11 @@ namespace HierarchyDesigner.Editor
                     float yMax = isLastChild ? rect.y + rect.height * 0.5f : rect.y + rect.height;
 
                     Rect vLineRect = new Rect(lineX, rect.y, 1f, yMax - rect.y);
-                    EditorGUI.DrawRect(vLineRect, lineColor);
+                    EditorGUI.DrawRect(vLineRect, segmentColor);
 
                     float branchLength = 8f;
                     Rect hLineRect = new Rect(lineX, rect.y + rect.height * 0.5f, branchLength, 1f);
-                    EditorGUI.DrawRect(hLineRect, lineColor);
+                    EditorGUI.DrawRect(hLineRect, segmentColor);
                 }
             }
         }
@@ -241,7 +291,7 @@ namespace HierarchyDesigner.Editor
         /// <summary>
         /// Handles visual rendering of the filtered component icons and badges.
         /// </summary>
-        private static void DrawRightSideFeatures(Rect rect, GameObject go)
+        private static void DrawRightSideFeatures(Rect rect, GameObject go, HierarchyThemeData theme)
         {
             float currentX = rect.xMax - 6f;
 
@@ -253,16 +303,16 @@ namespace HierarchyDesigner.Editor
             if (cachedDatabase != null && cachedDatabase.ShowChildCountBadges && go.transform.childCount > 0)
             {
                 int count = go.transform.childCount;
-                string text = count.ToString();
+                string text = $"[ {count} ]";
 
                 GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
                 {
                     alignment = TextAnchor.MiddleCenter,
                     fontStyle = FontStyle.Bold,
-                    normal = { textColor = new Color(0.95f, 0.72f, 0.2f) }
+                    normal = { textColor = new Color(0.75f, 0.75f, 0.75f) }
                 };
                 Vector2 size = labelStyle.CalcSize(new GUIContent(text));
-                float badgeW = Mathf.Max(18f, size.x + 8f);
+                float badgeW = Mathf.Max(24f, size.x + 8f);
                 float badgeH = 13f;
 
                 if (currentX - badgeW >= limitX)
@@ -278,6 +328,7 @@ namespace HierarchyDesigner.Editor
             {
                 Component[] comps = go.GetComponents<Component>();
                 int drawnCount = 0;
+
                 for (int i = 0; i < comps.Length; i++)
                 {
                     Component comp = comps[i];
@@ -309,28 +360,22 @@ namespace HierarchyDesigner.Editor
 
         private static void DrawChildCountBadge(Rect rect, int count)
         {
-            Color bgColor = new Color(0.15f, 0.15f, 0.15f, 0.85f);
-            Texture2D pillTex = GetOrCreatePillTexture(bgColor);
-            if (pillTex != null)
-            {
-                GUI.DrawTexture(rect, pillTex, ScaleMode.StretchToFill);
-            }
-
             GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
             {
                 alignment = TextAnchor.MiddleCenter,
                 fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(0.95f, 0.72f, 0.2f) }
+                normal = { textColor = new Color(0.75f, 0.75f, 0.75f) }
             };
-            GUI.Label(rect, count.ToString(), labelStyle);
+            GUI.Label(rect, $"[ {count} ]", labelStyle);
         }
 
         /// <summary>
         /// Generates or loads a cached gradient background texture.
         /// </summary>
-        private static Texture2D GetOrCreateGradientTexture(Color baseColor)
+        private static Texture2D GetOrCreateGradientTexture(Color baseColor, Color gradientColor, HierarchyThemeData theme)
         {
-            if (GradientTextureCache.TryGetValue(baseColor, out Texture2D tex) && tex != null)
+            string key = $"{baseColor.r}_{baseColor.g}_{baseColor.b}_{gradientColor.r}_{gradientColor.g}_{gradientColor.b}";
+            if (GradientTextureCache.TryGetValue(key, out Texture2D tex) && tex != null)
             {
                 return tex;
             }
@@ -348,20 +393,28 @@ namespace HierarchyDesigner.Editor
                     float tX = (float)x / width;
 
                     // Left to Right gradient
-                    Color col = Color.Lerp(baseColor, baseColor * 0.45f, tX);
+                    Color col = Color.Lerp(baseColor, gradientColor, tX);
                     col.a = baseColor.a;
+
+                    // Thin 1px border overlay
+                    bool isBorder = x == 0 || x == width - 1 || y == 0 || y == height - 1;
+                    if (isBorder)
+                    {
+                        Color borderColor = (theme != null) ? theme.borderColor : Color.white * 0.2f;
+                        col = Color.Lerp(col, borderColor, 0.5f);
+                    }
 
                     // Soft gloss highlight overlay
                     if (tY > 0.4f)
                     {
                         float gloss = (tY - 0.4f) / 0.6f;
-                        col = Color.Lerp(col, Color.white, gloss * 0.12f);
+                        col = Color.Lerp(col, Color.white, gloss * 0.1f);
                     }
 
                     // Bottom ambient drop shadow edge
                     if (tY < 0.1f)
                     {
-                        col = Color.Lerp(col, Color.black, (0.1f - tY) * 5f * 0.25f);
+                        col = Color.Lerp(col, Color.black, (0.1f - tY) * 5f * 0.2f);
                     }
 
                     // Anti-aliased corner masking
@@ -387,7 +440,7 @@ namespace HierarchyDesigner.Editor
                 }
             }
             tex.Apply();
-            GradientTextureCache[baseColor] = tex;
+            GradientTextureCache[key] = tex;
             return tex;
         }
 
@@ -467,6 +520,20 @@ namespace HierarchyDesigner.Editor
                 EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, lineThickness), color);
                 EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - lineThickness, rect.width, lineThickness), color);
             }
+        }
+
+        private static Color GetHeaderColorForTheme(string name, HierarchyThemeData theme, Color fallback)
+        {
+            string upper = name.ToUpperInvariant();
+            if (upper.Contains("XR")) return theme.xrColor;
+            if (upper.Contains("UI")) return theme.uiColor;
+            if (upper.Contains("AUDIO")) return theme.audioColor;
+            if (upper.Contains("ENVIRONMENT") || upper.Contains("ENV")) return theme.envColor;
+            if (upper.Contains("INTERACT")) return theme.interactColor;
+            if (upper.Contains("EFFECT")) return theme.effectsColor;
+            if (upper.Contains("MANAGER")) return theme.managersColor;
+            if (upper.Contains("DEBUG")) return theme.debugColor;
+            return fallback;
         }
 
         #endregion
