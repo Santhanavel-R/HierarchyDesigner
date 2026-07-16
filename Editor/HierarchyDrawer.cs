@@ -242,8 +242,8 @@ namespace HierarchyDesigner.Editor
             }
             EditorGUI.DrawRect(bgRect, baseBgColor);
 
-            // Fetch theme base color
-            Color headerBaseColor = (theme != null) ? GetHeaderColorForTheme(data.HeaderName, theme, data.Color) : data.Color;
+            // Use data.Color directly so user customized color changes reflect instantly
+            Color headerBaseColor = data.Color;
             Color headerGradientColor = (theme != null) ? theme.headerGradientColor : headerBaseColor * 0.65f;
 
             // Draw glossy gradient background

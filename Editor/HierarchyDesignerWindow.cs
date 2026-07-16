@@ -470,6 +470,10 @@ namespace HierarchyDesigner.Editor
             {
                 AddNewHeader();
             }
+            if (GUILayout.Button("🎲 Randomize Colors", GUILayout.Height(24f)))
+            {
+                RandomizeHeaderColors();
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.EndVertical();
@@ -534,10 +538,31 @@ namespace HierarchyDesigner.Editor
             
             SerializedProperty element = headersProperty.GetArrayElementAtIndex(index);
             element.FindPropertyRelative("headerName").stringValue = "New Header";
-            element.FindPropertyRelative("color").colorValue = new Color(0.2f, 0.2f, 0.2f, 0.8f);
+            
+            float hue = UnityEngine.Random.value;
+            Color randomCol = Color.HSVToRGB(hue, 0.7f, 0.75f);
+            randomCol.a = 0.85f;
+            element.FindPropertyRelative("color").colorValue = randomCol;
             element.FindPropertyRelative("guid").stringValue = Guid.NewGuid().ToString();
 
             serializedDatabase.ApplyModifiedProperties();
+            OnDatabaseModified();
+        }
+
+        private void RandomizeHeaderColors()
+        {
+            if (database == null || database.Headers == null) return;
+            
+            Undo.RecordObject(database, "Randomize Header Colors");
+            for (int i = 0; i < database.Headers.Count; i++)
+            {
+                float hue = UnityEngine.Random.value;
+                Color randomCol = Color.HSVToRGB(hue, 0.7f, 0.75f);
+                randomCol.a = 0.85f;
+                database.Headers[i].Color = randomCol;
+            }
+            
+            serializedDatabase.Update();
             OnDatabaseModified();
         }
 
@@ -551,17 +576,35 @@ namespace HierarchyDesigner.Editor
         private void ApplyThemeColorsToHeaders(HierarchyThemeData theme)
         {
             if (database == null || database.Headers == null) return;
-            foreach (var h in database.Headers)
+
+            Color[] themeColors = new Color[]
             {
+                theme.xrColor,
+                theme.uiColor,
+                theme.audioColor,
+                theme.envColor,
+                theme.interactColor,
+                theme.effectsColor,
+                theme.managersColor,
+                theme.debugColor
+            };
+
+            for (int i = 0; i < database.Headers.Count; i++)
+            {
+                var h = database.Headers[i];
                 string upper = h.HeaderName.ToUpperInvariant();
                 if (upper.Contains("XR")) h.Color = theme.xrColor;
                 else if (upper.Contains("UI")) h.Color = theme.uiColor;
                 else if (upper.Contains("AUDIO")) h.Color = theme.audioColor;
-                else if (upper.Contains("ENV")) h.Color = theme.envColor;
+                else if (upper.Contains("ENV") || upper.Contains("ENVIRONMENT")) h.Color = theme.envColor;
                 else if (upper.Contains("INTERACT")) h.Color = theme.interactColor;
                 else if (upper.Contains("EFFECT")) h.Color = theme.effectsColor;
                 else if (upper.Contains("MANAGER")) h.Color = theme.managersColor;
                 else if (upper.Contains("DEBUG")) h.Color = theme.debugColor;
+                else
+                {
+                    h.Color = themeColors[i % themeColors.Length];
+                }
             }
         }
 
