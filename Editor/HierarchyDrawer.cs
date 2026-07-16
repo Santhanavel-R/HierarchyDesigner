@@ -426,37 +426,50 @@ namespace HierarchyDesigner.Editor
                 }
             }
 
-            // 2. Draw Filtered Component Icons (Only Collider, Renderer, and custom Scripts)
+            // 2. Component Icons and Custom Scripts Tooltip
             if (cachedDatabase != null && cachedDatabase.ShowComponentIcons)
             {
                 Component[] comps = go.GetComponents<Component>();
                 int drawnCount = 0;
+                List<string> customScripts = new List<string>();
 
                 for (int i = 0; i < comps.Length; i++)
                 {
                     Component comp = comps[i];
                     if (comp == null || comp is Transform || comp is HierarchyHeader) continue;
 
-                    // Filter components specifically: Colliders, Renderers, and Scripts
-                    bool isCollider = comp is Collider || comp is Collider2D;
-                    bool isRenderer = comp is Renderer;
-                    bool isScript = comp is MonoBehaviour;
+                    bool isUnityComponent = comp.GetType().Namespace != null && 
+                                           (comp.GetType().Namespace.StartsWith("UnityEngine") || 
+                                            comp.GetType().Namespace.StartsWith("UnityEditor") ||
+                                            comp.GetType().Namespace.StartsWith("Unity"));
+                    bool isCustomScript = comp is MonoBehaviour && !isUnityComponent;
 
-                    if (isCollider || isRenderer || isScript)
+                    if (isCustomScript)
                     {
-                        if (drawnCount >= 5) break;
-
-                        if (currentX - 14f < limitX) break; // Prevent icons from drawing on top of GameObject name
-
-                        Texture2D compIcon = EditorGUIUtility.ObjectContent(null, comp.GetType()).image as Texture2D;
-                        if (compIcon != null)
+                        customScripts.Add(comp.GetType().Name);
+                    }
+                    else if (isUnityComponent)
+                    {
+                        // Draw Unity built-in component icons (limit to 5)
+                        if (drawnCount < 5 && currentX - 14f >= limitX)
                         {
-                            Rect iconRect = new Rect(currentX - 14f, rect.y + (rect.height - 14f) * 0.5f, 14f, 14f);
-                            GUI.DrawTexture(iconRect, compIcon);
-                            currentX -= 16f;
-                            drawnCount++;
+                            Texture2D compIcon = EditorGUIUtility.ObjectContent(null, comp.GetType()).image as Texture2D;
+                            if (compIcon != null)
+                            {
+                                Rect iconRect = new Rect(currentX - 14f, rect.y + (rect.height - 14f) * 0.5f, 14f, 14f);
+                                GUI.DrawTexture(iconRect, compIcon);
+                                currentX -= 16f;
+                                drawnCount++;
+                            }
                         }
                     }
+                }
+
+                if (customScripts.Count > 0)
+                {
+                    string tooltipText = "Custom Scripts:\n• " + string.Join("\n• ", customScripts);
+                    // Draw a transparent label over the selection rect with the tooltip content
+                    GUI.Label(selectionRect, new GUIContent("", tooltipText));
                 }
             }
         }
