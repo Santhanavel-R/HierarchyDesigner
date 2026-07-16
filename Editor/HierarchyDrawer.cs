@@ -274,7 +274,7 @@ namespace HierarchyDesigner.Editor
             if (cachedDatabase != null && cachedDatabase.ShowChildCountBadges && go.transform.childCount > 0)
             {
                 float badgeX = bgRect.xMax - 30f;
-                DrawChildCountBadge(new Rect(badgeX, bgRect.y, 30f, bgRect.height), go.transform.childCount);
+                DrawChildCountBadge(new Rect(badgeX, bgRect.y, 30f, bgRect.height), go.transform.childCount, go);
             }
 
             // Draw line dividers
