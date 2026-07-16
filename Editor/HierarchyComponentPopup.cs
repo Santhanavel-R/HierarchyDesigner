@@ -54,7 +54,7 @@ namespace HierarchyDesigner
         private int totalComponentCount = 0;
         private int totalFilteredCount = 0;
 
-        private const float Width = 340f;
+        private const float Width = 280f;
         private const float MaxHeight = 450f;
 
         // Custom Styles Colors (matching mockup)
@@ -263,9 +263,6 @@ namespace HierarchyDesigner
         {
             float height = 48f; // Header
 
-            // Search Bar Height
-            height += 32f;
-
             if (totalComponentCount == 0)
             {
                 return 180f; // Empty state height
@@ -343,9 +340,6 @@ namespace HierarchyDesigner
             // Header row with Name and Active Status
             DrawHeader();
 
-            // Search Bar
-            DrawSearchBar();
-
             if (totalComponentCount == 0)
             {
                 DrawEmptyState();
@@ -353,7 +347,7 @@ namespace HierarchyDesigner
             else
             {
                 // Component Categories List
-                float contentHeight = position.height - 48f - 32f - 84f; // subtracting header, search, and grid footer
+                float contentHeight = position.height - 48f - 84f; // subtracting header and grid footer
                 scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(contentHeight));
                 GUILayout.BeginVertical();
                 GUILayout.Space(4);
@@ -427,41 +421,7 @@ namespace HierarchyDesigner
             GUI.Label(badgeRect, totalComponentCount.ToString(), badgeStyle);
         }
 
-        private void DrawSearchBar()
-        {
-            Rect rect = GUILayoutUtility.GetRect(0f, 32f);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), DividerColor);
 
-            GUIStyle searchStyle = new GUIStyle(EditorStyles.textField)
-            {
-                fontSize = 11,
-                alignment = TextAnchor.MiddleLeft,
-                margin = new RectOffset(12, 12, 6, 6)
-            };
-
-            GUILayout.BeginArea(new Rect(rect.x + 12f, rect.y + 5f, rect.width - 24f, 22f));
-            EditorGUI.BeginChangeCheck();
-            
-            GUI.SetNextControlName("SearchField");
-            searchQuery = EditorGUILayout.TextField("", searchQuery, searchStyle);
-            
-            if (EditorGUI.EndChangeCheck())
-            {
-                FilterComponents();
-            }
-            GUILayout.EndArea();
-
-            // Search placeholder text
-            if (string.IsNullOrEmpty(searchQuery))
-            {
-                GUIStyle placeholderStyle = new GUIStyle(EditorStyles.miniLabel)
-                {
-                    fontSize = 10,
-                    normal = { textColor = new Color(0.45f, 0.45f, 0.45f) }
-                };
-                GUI.Label(new Rect(rect.x + 18f, rect.y + 7f, 200f, 18f), "🔍 Search components...", placeholderStyle);
-            }
-        }
 
         private void DrawCategoryGroup(CategoryGroup group)
         {
@@ -480,6 +440,7 @@ namespace HierarchyDesigner
             {
                 collapsed = !collapsed;
                 CategoryCollapsedStates[group.Name] = collapsed;
+                PositionWindow();
                 Event.current.Use();
             }
 

@@ -470,15 +470,10 @@ namespace HierarchyDesigner.Editor
                     }
                 }
 
-                // Trigger the premium floating component overview card popup on hover
-                float featuresWidth = (rect.xMax - 6f) - currentX;
-                if (featuresWidth > 0f)
+                // Trigger the premium floating component overview card popup when hovering anywhere over the row
+                if (Event.current.type == EventType.Repaint && rect.Contains(Event.current.mousePosition))
                 {
-                    Rect hoverRect = new Rect(currentX, rect.y, featuresWidth, rect.height);
-                    if (Event.current.type == EventType.Repaint && hoverRect.Contains(Event.current.mousePosition))
-                    {
-                        HierarchyComponentPopup.ShowPopup(go, rect);
-                    }
+                    HierarchyComponentPopup.ShowPopup(go, rect);
                 }
             }
         }
