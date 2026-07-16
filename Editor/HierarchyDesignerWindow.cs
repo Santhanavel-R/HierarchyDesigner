@@ -31,10 +31,7 @@ namespace HierarchyDesigner.Editor
         private SerializedProperty showGameObjectBorderProperty;
         private SerializedProperty gameObjectBorderColorProperty;
         private SerializedProperty gameObjectBorderOpacityProperty;
-        private SerializedProperty childCountColorModeProperty;
         private SerializedProperty childCountBorderStyleProperty;
-        private SerializedProperty childCountTextColorProperty;
-        private SerializedProperty childCountBorderColorProperty;
 
         private ReorderableList headerList;
         private Vector2 scrollPosition;
@@ -136,10 +133,7 @@ namespace HierarchyDesigner.Editor
                 showGameObjectBorderProperty = serializedDatabase.FindProperty("showGameObjectBorder");
                 gameObjectBorderColorProperty = serializedDatabase.FindProperty("gameObjectBorderColor");
                 gameObjectBorderOpacityProperty = serializedDatabase.FindProperty("gameObjectBorderOpacity");
-                childCountColorModeProperty = serializedDatabase.FindProperty("childCountColorMode");
                 childCountBorderStyleProperty = serializedDatabase.FindProperty("childCountBorderStyle");
-                childCountTextColorProperty = serializedDatabase.FindProperty("childCountTextColor");
-                childCountBorderColorProperty = serializedDatabase.FindProperty("childCountBorderColor");
 
                 SetupReorderableList();
             }
@@ -403,19 +397,7 @@ namespace HierarchyDesigner.Editor
             if (showChildCountBadgesProperty.boolValue)
             {
                 EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(childCountColorModeProperty, new GUIContent("Color Mode"));
-                
-                if (childCountColorModeProperty.intValue == (int)HierarchyChildCountColorMode.Custom)
-                {
-                    EditorGUILayout.PropertyField(childCountTextColorProperty, new GUIContent("Text Color"));
-                }
-                
                 EditorGUILayout.PropertyField(childCountBorderStyleProperty, new GUIContent("Border Style"));
-                if (childCountColorModeProperty.intValue == (int)HierarchyChildCountColorMode.Custom &&
-                    childCountBorderStyleProperty.intValue != (int)HierarchyChildCountBorderStyle.None)
-                {
-                    EditorGUILayout.PropertyField(childCountBorderColorProperty, new GUIContent("Border Color"));
-                }
                 EditorGUI.indentLevel--;
                 EditorGUILayout.Space(4);
             }

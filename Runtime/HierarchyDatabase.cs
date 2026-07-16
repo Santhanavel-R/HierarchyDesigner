@@ -17,16 +17,7 @@ namespace HierarchyDesigner.Runtime
         Monochrome
     }
 
-    /// <summary>
-    /// Color modes for the Child Count Badges.
-    /// </summary>
-    public enum HierarchyChildCountColorMode
-    {
-        Custom,
-        InheritNestingColor
-    }
-
-    /// <summary>
+        /// <summary>
     /// Border styles for the Child Count Badges.
     /// </summary>
     public enum HierarchyChildCountBorderStyle
@@ -79,20 +70,8 @@ namespace HierarchyDesigner.Runtime
         private bool showChildCountBadges = true;
 
         [SerializeField]
-        [Tooltip("The color resolution mode for child count badges.")]
-        private HierarchyChildCountColorMode childCountColorMode = HierarchyChildCountColorMode.InheritNestingColor;
-
-        [SerializeField]
         [Tooltip("The border outline/filled style for child count badges.")]
         private HierarchyChildCountBorderStyle childCountBorderStyle = HierarchyChildCountBorderStyle.Classic;
-
-        [SerializeField]
-        [Tooltip("The text label color inside the child count badge.")]
-        private Color childCountTextColor = new Color(0.75f, 0.75f, 0.75f, 1f);
-
-        [SerializeField]
-        [Tooltip("The outline border color of the child count badge (if Custom).")]
-        private Color childCountBorderColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
 
         [SerializeField]
         [Tooltip("The index of the selected color theme.")]
@@ -154,10 +133,7 @@ namespace HierarchyDesigner.Runtime
             nestingLinesColor = new Color(0.7f, 0.7f, 0.7f, 0.55f);
             showComponentIcons = true;
             showChildCountBadges = true;
-            childCountColorMode = HierarchyChildCountColorMode.InheritNestingColor;
             childCountBorderStyle = HierarchyChildCountBorderStyle.Classic;
-            childCountTextColor = new Color(0.75f, 0.75f, 0.75f, 1f);
-            childCountBorderColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
             useRainbowNesting = true;
             rainbowPalette = HierarchyRainbowPalette.Default;
             nestingLinesOpacity = 0.75f;
@@ -281,39 +257,12 @@ namespace HierarchyDesigner.Runtime
         }
 
         /// <summary>
-        /// Gets or sets the child count badge color mode.
-        /// </summary>
-        public HierarchyChildCountColorMode ChildCountColorMode
-        {
-            get => childCountColorMode;
-            set => childCountColorMode = value;
-        }
-
-        /// <summary>
         /// Gets or sets the child count badge border style.
         /// </summary>
         public HierarchyChildCountBorderStyle ChildCountBorderStyle
         {
             get => childCountBorderStyle;
             set => childCountBorderStyle = value;
-        }
-
-        /// <summary>
-        /// Gets or sets the child count badge text color.
-        /// </summary>
-        public Color ChildCountTextColor
-        {
-            get => childCountTextColor;
-            set => childCountTextColor = value;
-        }
-
-        /// <summary>
-        /// Gets or sets the child count badge border color.
-        /// </summary>
-        public Color ChildCountBorderColor
-        {
-            get => childCountBorderColor;
-            set => childCountBorderColor = value;
         }
 
         /// <summary>

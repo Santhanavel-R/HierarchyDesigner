@@ -465,43 +465,53 @@ namespace HierarchyDesigner.Editor
         {
             if (cachedDatabase == null) return;
 
-            // 1. Determine text (inherited) and decoration colors
-            Color textColor = cachedDatabase.ChildCountTextColor;
-            Color decColor = cachedDatabase.ChildCountBorderColor;
-
-            HierarchyThemeData theme = cachedDatabase.GetActiveTheme();
-
-            if (cachedDatabase.ChildCountColorMode == HierarchyChildCountColorMode.InheritNestingColor)
+            // 1. Determine text (inherited count) color based on nesting guide lines depth
+            Transform t = go.transform;
+            int depth = 0;
+            Transform curr = t.parent;
+            while (curr != null)
             {
-                // Resolve depth
-                Transform t = go.transform;
-                int depth = 0;
-                Transform curr = t.parent;
-                while (curr != null)
-                {
-                    depth++;
-                    curr = curr.parent;
-                }
-
-                Color baseNestingColor = cachedDatabase.NestingLinesColor;
-                float opacity = cachedDatabase.NestingLinesOpacity;
-                if (cachedDatabase.UseRainbowNesting)
-                {
-                    Color[] activeRainbowColors = GetRainbowColors(cachedDatabase.RainbowPalette);
-                    int activeDepth = Mathf.Max(0, depth - 1);
-                    baseNestingColor = activeRainbowColors[activeDepth % activeRainbowColors.Length];
-                }
-                
-                // Inherit color for text
-                textColor = new Color(baseNestingColor.r, baseNestingColor.g, baseNestingColor.b, baseNestingColor.a * opacity);
-                
-                // Decoration color follows the active theme line color or global nesting guide line color
-                decColor = (theme != null) ? theme.treeLineColor : cachedDatabase.NestingLinesColor;
+                depth++;
+                curr = curr.parent;
             }
 
-            HierarchyChildCountBorderStyle style = cachedDatabase.ChildCountBorderStyle;
+            Color baseNestingColor = cachedDatabase.NestingLinesColor;
+            float opacity = cachedDatabase.NestingLinesOpacity;
+            if (cachedDatabase.UseRainbowNesting)
+            {
+                Color[] activeRainbowColors = GetRainbowColors(cachedDatabase.RainbowPalette);
+                int activeDepth = Mathf.Max(0, depth - 1);
+                baseNestingColor = activeRainbowColors[activeDepth % activeRainbowColors.Length];
+            }
+            Color textColor = new Color(baseNestingColor.r, baseNestingColor.g, baseNestingColor.b, baseNestingColor.a * opacity);
 
-            // 2. Build rich text string based on style
+            // 2. Determine decoration color based on the selected style
+            HierarchyChildCountBorderStyle style = cachedDatabase.ChildCountBorderStyle;
+            Color decColor = Color.white;
+            switch (style)
+            {
+                case HierarchyChildCountBorderStyle.Classic:
+                case HierarchyChildCountBorderStyle.Bubble:
+                    decColor = new Color(0.65f, 0.65f, 0.65f, 0.85f); // Gray
+                    break;
+                case HierarchyChildCountBorderStyle.Diamond:
+                    decColor = new Color(0.12f, 0.73f, 0.82f, 1.0f); // Cyan
+                    break;
+                case HierarchyChildCountBorderStyle.Hexagon:
+                    decColor = new Color(0.95f, 0.62f, 0.12f, 1.0f); // Orange/Amber
+                    break;
+                case HierarchyChildCountBorderStyle.Notification:
+                    decColor = new Color(0.18f, 0.52f, 0.92f, 1.0f); // Notification Blue
+                    break;
+                case HierarchyChildCountBorderStyle.Dot:
+                    decColor = new Color(0.85f, 0.32f, 0.32f, 1.0f); // Red
+                    break;
+                case HierarchyChildCountBorderStyle.Tag:
+                    decColor = new Color(0.38f, 0.68f, 0.48f, 1.0f); // Soft Tag Green
+                    break;
+            }
+
+            // 3. Build rich text string based on style
             string hexText = ColorUtility.ToHtmlStringRGBA(textColor);
             string hexDec = ColorUtility.ToHtmlStringRGBA(decColor);
 
