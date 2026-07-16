@@ -465,11 +465,15 @@ namespace HierarchyDesigner.Editor
                     }
                 }
 
-                if (customScripts.Count > 0)
+                // Trigger the premium floating component overview card popup on hover
+                float featuresWidth = (rect.xMax - 6f) - currentX;
+                if (featuresWidth > 0f)
                 {
-                    string tooltipText = "Custom Scripts:\n• " + string.Join("\n• ", customScripts);
-                    // Draw a transparent label over the selection rect with the tooltip content
-                    GUI.Label(rect, new GUIContent("", tooltipText));
+                    Rect hoverRect = new Rect(currentX, rect.y, featuresWidth, rect.height);
+                    if (Event.current.type == EventType.Repaint && hoverRect.Contains(Event.current.mousePosition))
+                    {
+                        HierarchyComponentPopup.ShowPopup(go, rect);
+                    }
                 }
             }
         }
