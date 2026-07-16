@@ -22,16 +22,86 @@ namespace HierarchyDesigner.Editor
         private static readonly Dictionary<string, Texture2D> GradientTextureCache = new Dictionary<string, Texture2D>();
         private static readonly Dictionary<Color, Texture2D> PillTextureCache = new Dictionary<Color, Texture2D>();
 
-        // Rainbow color sequence for nesting lines
-        private static readonly Color[] RainbowColors = new Color[]
+        // Rainbow color sequences for nesting lines
+        private static readonly Color[] RainbowColorsDefault = new Color[]
         {
-            new Color(0.9f, 0.3f, 0.3f, 0.75f),  // Muted Red
-            new Color(0.9f, 0.6f, 0.2f, 0.75f),  // Muted Orange
-            new Color(0.9f, 0.8f, 0.2f, 0.75f),  // Muted Yellow
-            new Color(0.3f, 0.8f, 0.4f, 0.75f),  // Muted Green
-            new Color(0.2f, 0.6f, 0.9f, 0.75f),  // Muted Blue
-            new Color(0.6f, 0.3f, 0.9f, 0.75f)   // Muted Violet
+            new Color(0.9f, 0.3f, 0.3f),  // Muted Red
+            new Color(0.9f, 0.6f, 0.2f),  // Muted Orange
+            new Color(0.9f, 0.8f, 0.2f),  // Muted Yellow
+            new Color(0.3f, 0.8f, 0.4f),  // Muted Green
+            new Color(0.2f, 0.6f, 0.9f),  // Muted Blue
+            new Color(0.6f, 0.3f, 0.9f)   // Muted Violet
         };
+
+        private static readonly Color[] RainbowColorsPastel = new Color[]
+        {
+            new Color(1.0f, 0.65f, 0.65f),
+            new Color(1.0f, 0.8f, 0.65f),
+            new Color(1.0f, 0.95f, 0.7f),
+            new Color(0.75f, 0.92f, 0.75f),
+            new Color(0.7f, 0.85f, 1.0f),
+            new Color(0.88f, 0.78f, 1.0f)
+        };
+
+        private static readonly Color[] RainbowColorsNeon = new Color[]
+        {
+            new Color(1.0f, 0.1f, 0.5f),
+            new Color(1.0f, 0.5f, 0.0f),
+            new Color(0.85f, 1.0f, 0.0f),
+            new Color(0.0f, 1.0f, 0.4f),
+            new Color(0.0f, 0.85f, 1.0f),
+            new Color(0.7f, 0.0f, 1.0f)
+        };
+
+        private static readonly Color[] RainbowColorsWarm = new Color[]
+        {
+            new Color(0.85f, 0.15f, 0.25f),
+            new Color(0.95f, 0.45f, 0.15f),
+            new Color(0.95f, 0.75f, 0.15f),
+            new Color(0.95f, 0.5f, 0.5f),
+            new Color(1.0f, 0.8f, 0.2f),
+            new Color(0.85f, 0.75f, 0.65f)
+        };
+
+        private static readonly Color[] RainbowColorsCool = new Color[]
+        {
+            new Color(0.0f, 0.55f, 0.55f),
+            new Color(0.5f, 0.85f, 0.7f),
+            new Color(0.35f, 0.7f, 0.95f),
+            new Color(0.25f, 0.35f, 0.75f),
+            new Color(0.55f, 0.25f, 0.6f),
+            new Color(0.15f, 0.65f, 0.35f)
+        };
+
+        private static readonly Color[] RainbowColorsMonochrome = new Color[]
+        {
+            new Color(0.35f, 0.35f, 0.35f),
+            new Color(0.5f, 0.5f, 0.5f),
+            new Color(0.65f, 0.65f, 0.65f),
+            new Color(0.45f, 0.5f, 0.55f),
+            new Color(0.8f, 0.8f, 0.8f),
+            new Color(0.25f, 0.25f, 0.25f)
+        };
+
+        private static Color[] GetRainbowColors(HierarchyRainbowPalette palette)
+        {
+            switch (palette)
+            {
+                case HierarchyRainbowPalette.Pastel:
+                    return RainbowColorsPastel;
+                case HierarchyRainbowPalette.Neon:
+                    return RainbowColorsNeon;
+                case HierarchyRainbowPalette.Warm:
+                    return RainbowColorsWarm;
+                case HierarchyRainbowPalette.Cool:
+                    return RainbowColorsCool;
+                case HierarchyRainbowPalette.Monochrome:
+                    return RainbowColorsMonochrome;
+                case HierarchyRainbowPalette.Default:
+                default:
+                    return RainbowColorsDefault;
+            }
+        }
 
         #endregion
 
@@ -242,11 +312,15 @@ namespace HierarchyDesigner.Editor
             float lineOffset = -10f; // Alignment offset for foldouts
 
             bool useRainbow = cachedDatabase != null && cachedDatabase.UseRainbowNesting;
+            HierarchyRainbowPalette palette = cachedDatabase != null ? cachedDatabase.RainbowPalette : HierarchyRainbowPalette.Default;
+            float opacity = cachedDatabase != null ? cachedDatabase.NestingLinesOpacity : 0.75f;
+            Color[] activeRainbowColors = GetRainbowColors(palette);
 
             for (int i = 0; i < depth; i++)
             {
                 float lineX = rootX + i * indent + lineOffset;
-                Color segmentColor = useRainbow ? RainbowColors[i % RainbowColors.Length] : lineColor;
+                Color baseColor = useRainbow ? activeRainbowColors[i % activeRainbowColors.Length] : lineColor;
+                Color segmentColor = new Color(baseColor.r, baseColor.g, baseColor.b, baseColor.a * opacity);
 
                 if (i < depth - 1)
                 {

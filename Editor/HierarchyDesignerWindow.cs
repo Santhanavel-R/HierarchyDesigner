@@ -26,6 +26,8 @@ namespace HierarchyDesigner.Editor
         private SerializedProperty showChildCountBadgesProperty;
         private SerializedProperty activeThemeIndexProperty;
         private SerializedProperty useRainbowNestingProperty;
+        private SerializedProperty rainbowPaletteProperty;
+        private SerializedProperty nestingLinesOpacityProperty;
         private SerializedProperty showGameObjectBorderProperty;
 
         private ReorderableList headerList;
@@ -123,6 +125,8 @@ namespace HierarchyDesigner.Editor
                 showChildCountBadgesProperty = serializedDatabase.FindProperty("showChildCountBadges");
                 activeThemeIndexProperty = serializedDatabase.FindProperty("activeThemeIndex");
                 useRainbowNestingProperty = serializedDatabase.FindProperty("useRainbowNesting");
+                rainbowPaletteProperty = serializedDatabase.FindProperty("rainbowPalette");
+                nestingLinesOpacityProperty = serializedDatabase.FindProperty("nestingLinesOpacity");
                 showGameObjectBorderProperty = serializedDatabase.FindProperty("showGameObjectBorder");
 
                 SetupReorderableList();
@@ -328,19 +332,31 @@ namespace HierarchyDesigner.Editor
             GUILayout.Label("Feature Toggles & Configurations", EditorStyles.boldLabel);
             
             GUILayout.BeginHorizontal();
-            EditorGUILayout.PropertyField(showNestingLinesProperty, new GUIContent("Nesting Lines"));
-            EditorGUILayout.PropertyField(nestingLinesColorProperty, new GUIContent("Nesting Color"));
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
             EditorGUILayout.PropertyField(showComponentIconsProperty, new GUIContent("Component Icons"));
             EditorGUILayout.PropertyField(showChildCountBadgesProperty, new GUIContent("Child Counts"));
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            EditorGUILayout.PropertyField(useRainbowNestingProperty, new GUIContent("Rainbow Nesting"));
             EditorGUILayout.PropertyField(showGameObjectBorderProperty, new GUIContent("GameObject Border"));
             GUILayout.EndHorizontal();
+
+            EditorGUILayout.Space(4);
+            EditorGUILayout.PropertyField(showNestingLinesProperty, new GUIContent("Nesting Lines"));
+            if (showNestingLinesProperty.boolValue)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(nestingLinesColorProperty, new GUIContent("Nesting Line Color"));
+                EditorGUILayout.PropertyField(useRainbowNestingProperty, new GUIContent("Rainbow Nesting"));
+
+                if (useRainbowNestingProperty.boolValue)
+                {
+                    EditorGUI.indentLevel++;
+                    EditorGUILayout.PropertyField(rainbowPaletteProperty, new GUIContent("Rainbow Palette Theme"));
+                    EditorGUILayout.PropertyField(nestingLinesOpacityProperty, new GUIContent("Rainbow Opacity"));
+                    EditorGUI.indentLevel--;
+                }
+                EditorGUI.indentLevel--;
+            }
 
             GUILayout.Space(4);
             GUILayout.EndVertical();

@@ -5,6 +5,19 @@ using UnityEngine;
 namespace HierarchyDesigner.Runtime
 {
     /// <summary>
+    /// Rainbow color palette types for nesting guide lines.
+    /// </summary>
+    public enum HierarchyRainbowPalette
+    {
+        Default,
+        Pastel,
+        Neon,
+        Warm,
+        Cool,
+        Monochrome
+    }
+
+    /// <summary>
     /// Configuration database storing custom hierarchy headers, line styles,
     /// visual feature toggles, and centralized visual themes.
     /// </summary>
@@ -50,6 +63,15 @@ namespace HierarchyDesigner.Runtime
         private bool useRainbowNesting = true;
 
         [SerializeField]
+        [Tooltip("The selected rainbow color theme palette.")]
+        private HierarchyRainbowPalette rainbowPalette = HierarchyRainbowPalette.Default;
+
+        [SerializeField]
+        [Tooltip("The opacity of the nesting lines (mostly rainbow).")]
+        [Range(0f, 1f)]
+        private float nestingLinesOpacity = 0.75f;
+
+        [SerializeField]
         [Tooltip("Toggle rendering a thin visual border around selected/hovered GameObjects.")]
         private bool showGameObjectBorder = true;
 
@@ -84,6 +106,8 @@ namespace HierarchyDesigner.Runtime
             showComponentIcons = true;
             showChildCountBadges = true;
             useRainbowNesting = true;
+            rainbowPalette = HierarchyRainbowPalette.Default;
+            nestingLinesOpacity = 0.75f;
             showGameObjectBorder = true;
             activeThemeIndex = 0;
             InitializeDefaultThemes();
@@ -172,6 +196,24 @@ namespace HierarchyDesigner.Runtime
         {
             get => useRainbowNesting;
             set => useRainbowNesting = value;
+        }
+
+        /// <summary>
+        /// Gets or sets the selected rainbow color theme palette.
+        /// </summary>
+        public HierarchyRainbowPalette RainbowPalette
+        {
+            get => rainbowPalette;
+            set => rainbowPalette = value;
+        }
+
+        /// <summary>
+        /// Gets or sets the opacity of the nesting lines.
+        /// </summary>
+        public float NestingLinesOpacity
+        {
+            get => nestingLinesOpacity;
+            set => nestingLinesOpacity = value;
         }
 
         /// <summary>
