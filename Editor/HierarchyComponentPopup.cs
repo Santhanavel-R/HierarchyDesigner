@@ -37,6 +37,8 @@ namespace HierarchyDesigner
         private static Texture2D cardTexture;
         private static Texture2D headerTexture;
 
+        private static Rect targetRowScreenRect;
+
         public static void ShowPopup(GameObject go, Rect rowRect)
         {
             if (go == null) return;
@@ -53,6 +55,11 @@ namespace HierarchyDesigner
 
             instance.targetGameObject = go;
             instance.targetRowRect = rowRect;
+
+            // Resolve target row rect in screen space (since GUI context is active here)
+            Vector2 rowScreenPos = GUIUtility.GUIToScreenPoint(new Vector2(rowRect.x, rowRect.y));
+            targetRowScreenRect = new Rect(rowScreenPos.x, rowScreenPos.y, rowRect.width, rowRect.height);
+
             instance.PositionWindow();
         }
 
@@ -208,30 +215,21 @@ namespace HierarchyDesigner
                 scale = Mathf.Min(1f, scale + (float)(delta / 0.12) * 0.02f);
                 Repaint();
             }
-
-            // Check if mouse has exited the popup and target row
-            Vector2 mousePos = Event.current != null ? Event.current.mousePosition : Vector2.zero;
-            Vector2 screenMousePos = GUIUtility.GUIToScreenPoint(mousePos);
-
-            if (targetGameObject == null || !position.Contains(screenMousePos))
-            {
-                // Convert target row rect to screen space
-                Vector2 rowScreenPos = GUIUtility.GUIToScreenPoint(new Vector2(targetRowRect.x, targetRowRect.y));
-                Rect rowScreenRect = new Rect(rowScreenPos.x, rowScreenPos.y, targetRowRect.width, targetRowRect.height);
-
-                // Add 10px buffer to prevent instant close during micro movements
-                Rect bufferPopupRect = new Rect(position.x - 10f, position.y - 10f, position.width + 20f, position.height + 20f);
-
-                if (!rowScreenRect.Contains(screenMousePos) && !bufferPopupRect.Contains(screenMousePos))
-                {
-                    Close();
-                }
-            }
         }
 
         private void OnGUI()
         {
             if (targetGameObject == null)
+            {
+                Close();
+                return;
+            }
+
+            // Check if mouse has exited both the popup and target row in screen space
+            Vector2 screenMousePos = GUIUtility.GUIToScreenPoint(Event.current.mousePosition);
+            Rect bufferPopupRect = new Rect(position.x - 12f, position.y - 12f, position.width + 24f, position.height + 24f);
+
+            if (!targetRowScreenRect.Contains(screenMousePos) && !bufferPopupRect.Contains(screenMousePos))
             {
                 Close();
                 return;
