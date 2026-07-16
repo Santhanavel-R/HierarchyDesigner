@@ -76,6 +76,15 @@ namespace HierarchyDesigner.Runtime
         private bool showGameObjectBorder = true;
 
         [SerializeField]
+        [Tooltip("The custom color used to draw GameObject borders.")]
+        private Color gameObjectBorderColor = new Color(0.24f, 0.48f, 0.9f, 1f);
+
+        [SerializeField]
+        [Tooltip("The opacity of the GameObject borders.")]
+        [Range(0f, 1f)]
+        private float gameObjectBorderOpacity = 0.6f;
+
+        [SerializeField]
         [Tooltip("The list of built-in and custom visual themes.")]
         private List<HierarchyThemeData> themes = new List<HierarchyThemeData>();
 
@@ -109,6 +118,8 @@ namespace HierarchyDesigner.Runtime
             rainbowPalette = HierarchyRainbowPalette.Default;
             nestingLinesOpacity = 0.75f;
             showGameObjectBorder = true;
+            gameObjectBorderColor = new Color(0.24f, 0.48f, 0.9f, 1f);
+            gameObjectBorderOpacity = 0.6f;
             activeThemeIndex = 0;
             InitializeDefaultThemes();
         }
@@ -223,6 +234,24 @@ namespace HierarchyDesigner.Runtime
         {
             get => showGameObjectBorder;
             set => showGameObjectBorder = value;
+        }
+
+        /// <summary>
+        /// Gets or sets the custom color used to draw GameObject borders.
+        /// </summary>
+        public Color GameObjectBorderColor
+        {
+            get => gameObjectBorderColor;
+            set => gameObjectBorderColor = value;
+        }
+
+        /// <summary>
+        /// Gets or sets the opacity of the GameObject borders.
+        /// </summary>
+        public float GameObjectBorderOpacity
+        {
+            get => gameObjectBorderOpacity;
+            set => gameObjectBorderOpacity = value;
         }
 
         /// <summary>

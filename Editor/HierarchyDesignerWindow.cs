@@ -29,6 +29,8 @@ namespace HierarchyDesigner.Editor
         private SerializedProperty rainbowPaletteProperty;
         private SerializedProperty nestingLinesOpacityProperty;
         private SerializedProperty showGameObjectBorderProperty;
+        private SerializedProperty gameObjectBorderColorProperty;
+        private SerializedProperty gameObjectBorderOpacityProperty;
 
         private ReorderableList headerList;
         private Vector2 scrollPosition;
@@ -128,6 +130,8 @@ namespace HierarchyDesigner.Editor
                 rainbowPaletteProperty = serializedDatabase.FindProperty("rainbowPalette");
                 nestingLinesOpacityProperty = serializedDatabase.FindProperty("nestingLinesOpacity");
                 showGameObjectBorderProperty = serializedDatabase.FindProperty("showGameObjectBorder");
+                gameObjectBorderColorProperty = serializedDatabase.FindProperty("gameObjectBorderColor");
+                gameObjectBorderOpacityProperty = serializedDatabase.FindProperty("gameObjectBorderOpacity");
 
                 SetupReorderableList();
             }
@@ -320,15 +324,20 @@ namespace HierarchyDesigner.Editor
         {
             if (serializedDatabase == null || globalLineColorProperty == null || globalLineStyleProperty == null) return;
 
+            // Box 1: Global Separation & Styling Settings
             GUILayout.BeginVertical(EditorStyles.helpBox);
             GUILayout.Label("Global Separation & Styling Settings", EditorStyles.boldLabel);
-            
             GUILayout.BeginHorizontal();
             EditorGUILayout.PropertyField(globalLineColorProperty, new GUIContent("Line Color"));
             EditorGUILayout.PropertyField(globalLineStyleProperty, new GUIContent("Line Style"));
             GUILayout.EndHorizontal();
+            GUILayout.Space(4);
+            GUILayout.EndVertical();
 
-            GUILayout.Space(6);
+            GUILayout.Space(4);
+
+            // Box 2: Feature Toggles & Configurations
+            GUILayout.BeginVertical(EditorStyles.helpBox);
             GUILayout.Label("Feature Toggles & Configurations", EditorStyles.boldLabel);
             
             GUILayout.BeginHorizontal();
@@ -336,16 +345,27 @@ namespace HierarchyDesigner.Editor
             EditorGUILayout.PropertyField(showChildCountBadgesProperty, new GUIContent("Child Counts"));
             GUILayout.EndHorizontal();
 
-            GUILayout.BeginHorizontal();
-            EditorGUILayout.PropertyField(showGameObjectBorderProperty, new GUIContent("GameObject Border"));
-            GUILayout.EndHorizontal();
-
             EditorGUILayout.Space(4);
+            EditorGUILayout.PropertyField(showGameObjectBorderProperty, new GUIContent("GameObject Border"));
+            if (showGameObjectBorderProperty.boolValue)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(gameObjectBorderColorProperty, new GUIContent("Border Color"));
+                EditorGUILayout.PropertyField(gameObjectBorderOpacityProperty, new GUIContent("Border Opacity"));
+                EditorGUI.indentLevel--;
+            }
+            GUILayout.Space(4);
+            GUILayout.EndVertical();
+
+            GUILayout.Space(4);
+
+            // Box 3: Nesting Lines Settings
+            GUILayout.BeginVertical(EditorStyles.helpBox);
+            GUILayout.Label("Nesting Lines Settings", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(showNestingLinesProperty, new GUIContent("Nesting Lines"));
             if (showNestingLinesProperty.boolValue)
             {
                 EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(nestingLinesColorProperty, new GUIContent("Nesting Line Color"));
                 EditorGUILayout.PropertyField(useRainbowNestingProperty, new GUIContent("Rainbow Nesting"));
 
                 if (useRainbowNestingProperty.boolValue)
@@ -355,12 +375,16 @@ namespace HierarchyDesigner.Editor
                     EditorGUILayout.PropertyField(nestingLinesOpacityProperty, new GUIContent("Rainbow Opacity"));
                     EditorGUI.indentLevel--;
                 }
+                else
+                {
+                    EditorGUI.indentLevel++;
+                    EditorGUILayout.PropertyField(nestingLinesColorProperty, new GUIContent("Nesting Line Color"));
+                    EditorGUI.indentLevel--;
+                }
                 EditorGUI.indentLevel--;
             }
-
             GUILayout.Space(4);
             GUILayout.EndVertical();
-            GUILayout.Space(2);
         }
 
         private void DrawReorderingControls()

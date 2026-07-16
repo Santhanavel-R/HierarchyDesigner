@@ -1,6 +1,6 @@
 {
   "name": "com.santhanavelr.hierarchydesigner",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "displayName": "Hierarchy Designer",
   "description": "Organize Unity hierarchy visually with custom headers and styling.",
   "unity": "2021.3",

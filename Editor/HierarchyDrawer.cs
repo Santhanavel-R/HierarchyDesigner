@@ -198,9 +198,12 @@ namespace HierarchyDesigner.Editor
 
                     if (isSelected || isHoveredRow)
                     {
+                        Color customBorderColor = cachedDatabase.GameObjectBorderColor;
+                        float borderOpacity = cachedDatabase.GameObjectBorderOpacity;
+
                         Color borderCol = isSelected
-                            ? (EditorGUIUtility.isProSkin ? new Color(0.24f, 0.48f, 0.9f, 0.6f) : new Color(0.24f, 0.48f, 0.9f, 0.8f))
-                            : (EditorGUIUtility.isProSkin ? new Color(1f, 1f, 1f, 0.15f) : new Color(0f, 0f, 0f, 0.15f));
+                            ? new Color(customBorderColor.r, customBorderColor.g, customBorderColor.b, customBorderColor.a * borderOpacity)
+                            : new Color(customBorderColor.r, customBorderColor.g, customBorderColor.b, customBorderColor.a * borderOpacity * 0.35f);
 
                         // Left border line
                         EditorGUI.DrawRect(new Rect(selectionRect.xMin - HierarchyStyles.LeftOffset, selectionRect.y, 1f, selectionRect.height), borderCol);
