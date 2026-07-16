@@ -16,27 +16,70 @@ namespace HierarchyDesigner
         private double lastTime;
         private float scale = 0.98f;
 
-        private const float Width = 250f;
-        private const float MaxHeight = 350f;
+        private string searchQuery = "";
+        
+        // Cache collapsed states per category to persist during hover
+        private static readonly Dictionary<string, bool> CategoryCollapsedStates = new Dictionary<string, bool>()
+        {
+            { "Scripts", false },
+            { "Rendering", false },
+            { "Physics", false },
+            { "Audio", false },
+            { "Animation", false },
+            { "UI", false },
+            { "Navigation", false },
+            { "AI", false },
+            { "Lighting", false },
+            { "Miscellaneous", false }
+        };
+
+        // Cached Data structures
+        private class CachedComponent
+        {
+            public Component Component;
+            public string CleanName;
+            public Texture2D Icon;
+        }
+
+        private class CategoryGroup
+        {
+            public string Name;
+            public string IconStr;
+            public Color TitleColor;
+            public List<CachedComponent> Items = new List<CachedComponent>();
+            public List<CachedComponent> FilteredItems = new List<CachedComponent>();
+        }
+
+        private List<CategoryGroup> cachedCategories = new List<CategoryGroup>();
+        private int totalComponentCount = 0;
+        private int totalFilteredCount = 0;
+
+        private const float Width = 340f;
+        private const float MaxHeight = 450f;
 
         // Custom Styles Colors (matching mockup)
         private static readonly Color BgColor = new Color(0.145f, 0.145f, 0.15f, 1f); // #252526
         private static readonly Color HeaderBgColor = new Color(0.18f, 0.18f, 0.19f, 1f); // Slightly lighter
         private static readonly Color BorderColor = new Color(0.25f, 0.25f, 0.26f, 1f); // 1px subtle border
-        private static readonly Color DividerColor = new Color(1f, 1f, 1f, 0.12f); // 12% opacity divider
+        private static readonly Color DividerColor = new Color(1f, 1f, 1f, 0.08f); // 8% opacity divider
 
-        // Categories & Accents
-        private class CategoryInfo
+        // Categories Details
+        private static readonly Dictionary<string, (string Icon, Color Color)> CategoryDetails = new Dictionary<string, (string, Color)>()
         {
-            public string Name;
-            public string Icon;
-            public Color AccentColor;
-            public List<string> Components = new List<string>();
-        }
+            { "Scripts", ("#", new Color(0.72f, 0.61f, 1f)) },
+            { "Rendering", ("📷", new Color(0.31f, 0.85f, 1f)) },
+            { "Physics", ("⚙", new Color(0.48f, 0.88f, 0.48f)) },
+            { "Audio", ("🔊", new Color(0.22f, 0.91f, 0.91f)) },
+            { "Animation", ("🧩", new Color(1f, 0.64f, 0f)) },
+            { "UI", ("🎨", new Color(1f, 0.41f, 0.7f)) },
+            { "Navigation", ("🗺", new Color(1f, 0.84f, 0f)) },
+            { "AI", ("🧠", new Color(1f, 0.4f, 0.4f)) },
+            { "Lighting", ("💡", new Color(1f, 0.92f, 0.5f)) },
+            { "Miscellaneous", ("📦", new Color(0.7f, 0.7f, 0.7f)) }
+        };
 
         private static Texture2D cardTexture;
         private static Texture2D headerTexture;
-
         private static Rect targetRowScreenRect;
         private static Vector2 mouseScreenPosition;
 
@@ -59,7 +102,13 @@ namespace HierarchyDesigner
                 instance.ShowPopup();
             }
 
-            instance.targetGameObject = go;
+            // Only rebuild cache when gameobject selection changes
+            if (instance.targetGameObject != go)
+            {
+                instance.targetGameObject = go;
+                instance.RebuildComponentCache();
+            }
+
             instance.targetRowRect = rowRect;
 
             // Resolve target row rect in screen space (since GUI context is active here)
@@ -69,15 +118,130 @@ namespace HierarchyDesigner
             instance.PositionWindow();
         }
 
+        private void RebuildComponentCache()
+        {
+            cachedCategories.Clear();
+            totalComponentCount = 0;
+
+            if (targetGameObject == null) return;
+
+            var comps = targetGameObject.GetComponents<Component>();
+            var groupDict = new Dictionary<string, CategoryGroup>();
+
+            foreach (var detail in CategoryDetails)
+            {
+                groupDict[detail.Key] = new CategoryGroup
+                {
+                    Name = detail.Key,
+                    IconStr = detail.Value.Icon,
+                    TitleColor = detail.Value.Color
+                };
+            }
+
+            foreach (var comp in comps)
+            {
+                if (comp == null || comp is Transform || comp is HierarchyHeader) continue;
+
+                totalComponentCount++;
+                string rawName = comp.GetType().Name;
+                string cleanName = SplitPascalCase(rawName);
+
+                Texture2D icon = EditorGUIUtility.ObjectContent(null, comp.GetType()).image as Texture2D;
+
+                CachedComponent cachedComp = new CachedComponent
+                {
+                    Component = comp,
+                    CleanName = cleanName,
+                    Icon = icon
+                };
+
+                // Map to categories
+                string category = CategorizeComponent(comp);
+                groupDict[category].Items.Add(cachedComp);
+            }
+
+            foreach (var group in groupDict.Values)
+            {
+                if (group.Items.Count > 0)
+                {
+                    cachedCategories.Add(group);
+                }
+            }
+
+            FilterComponents();
+        }
+
+        private string CategorizeComponent(Component comp)
+        {
+            Type t = comp.GetType();
+            string ns = t.Namespace ?? "";
+
+            bool isUnityComponent = ns.StartsWith("UnityEngine") || ns.StartsWith("UnityEditor") || ns.StartsWith("Unity");
+            if (comp is MonoBehaviour && !isUnityComponent)
+            {
+                return "Scripts";
+            }
+
+            if (t.Name.Contains("Camera") || t.Name.Contains("Renderer") || t.Name.Contains("CanvasRenderer") || t.Name.Contains("MeshFilter") || comp is Skybox || comp is Projector)
+            {
+                return "Rendering";
+            }
+            if (comp is Collider || comp is Collider2D || comp is Rigidbody || comp is Rigidbody2D || t.Name.Contains("Joint") || comp is ConstantForce)
+            {
+                return "Physics";
+            }
+            if (comp is AudioSource || comp is AudioListener || t.Name.Contains("Audio"))
+            {
+                return "Audio";
+            }
+            if (comp is Animator || comp is Animation || t.Name.Contains("Playable"))
+            {
+                return "Animation";
+            }
+            if (t.Name.Contains("Canvas") || t.Name.Contains("Graphic") || t.Name.Contains("Button") || t.Name.Contains("Text") || t.Name.Contains("Image") || t.Name.Contains("Layout") || t.Name.Contains("EventSystem"))
+            {
+                return "UI";
+            }
+            if (t.Name.Contains("NavMesh") || t.Name.Contains("OffMeshLink"))
+            {
+                return "Navigation";
+            }
+            if (t.Name.Contains("Agent") || t.Name.Contains("Sensor") || t.Name.Contains("Decision") || t.Name.Contains("Behaviour"))
+            {
+                return "AI";
+            }
+            if (comp is Light || comp is ReflectionProbe || comp is LightProbeGroup || t.Name.Contains("Light"))
+            {
+                return "Lighting";
+            }
+
+            return "Miscellaneous";
+        }
+
+        private void FilterComponents()
+        {
+            totalFilteredCount = 0;
+            string filter = searchQuery.Trim().ToLower();
+
+            foreach (var group in cachedCategories)
+            {
+                group.FilteredItems.Clear();
+                foreach (var item in group.Items)
+                {
+                    if (string.IsNullOrEmpty(filter) || item.CleanName.ToLower().Contains(filter))
+                    {
+                        group.FilteredItems.Add(item);
+                        totalFilteredCount++;
+                    }
+                }
+            }
+        }
+
         private void PositionWindow()
         {
             if (targetGameObject == null) return;
 
-            // Get screen space cursor position
-            Vector2 mouseScreenPos = Event.current != null ? GUIUtility.GUIToScreenPoint(Event.current.mousePosition) : Vector2.zero;
             Vector2 screenPos = GUIUtility.GUIToScreenPoint(new Vector2(targetRowRect.xMax + 12f, targetRowRect.y));
-
-            // Calculate height dynamically
             float height = CalculateHeight();
 
             // Screen boundaries check
@@ -88,7 +252,6 @@ namespace HierarchyDesigner
             }
             if (screenPos.x + Width > screenBounds.width - 20f)
             {
-                // Reposition to the left of the row if it exceeds screen width
                 screenPos.x = GUIUtility.GUIToScreenPoint(new Vector2(targetRowRect.xMin - Width - 12f, targetRowRect.y)).x;
             }
 
@@ -98,115 +261,34 @@ namespace HierarchyDesigner
 
         private float CalculateHeight()
         {
-            float height = 44f; // Header
-            
-            var categories = GetCategorizedComponents();
-            if (categories.Count > 0)
+            float height = 48f; // Header
+
+            // Search Bar Height
+            height += 32f;
+
+            if (totalComponentCount == 0)
             {
-                foreach (var cat in categories)
-                {
-                    height += 24f; // Category Header
-                    height += cat.Components.Count * 18f; // Items
-                    height += 12f; // Divider and spacing
-                }
+                return 180f; // Empty state height
             }
 
-            // Metadata footer
-            height += 48f;
+            foreach (var group in cachedCategories)
+            {
+                if (group.FilteredItems.Count == 0) continue;
+
+                height += 28f; // Category Header
+                
+                CategoryCollapsedStates.TryGetValue(group.Name, out bool collapsed);
+                if (!collapsed)
+                {
+                    height += group.FilteredItems.Count * 22f; // Items
+                }
+                height += 8f; // Spacing
+            }
+
+            // Interactive grid footer height
+            height += 84f;
 
             return Mathf.Min(height, MaxHeight);
-        }
-
-        private List<CategoryInfo> GetCategorizedComponents()
-        {
-            var categories = new List<CategoryInfo>();
-            if (targetGameObject == null) return categories;
-
-            var comps = targetGameObject.GetComponents<Component>();
-
-            // Setup Categories
-            var scripts = new CategoryInfo { Name = "Scripts", Icon = "📄", AccentColor = new Color(0.72f, 0.61f, 1f) };
-            var rendering = new CategoryInfo { Name = "Rendering", Icon = "📷", AccentColor = new Color(0.31f, 0.85f, 1f) };
-            var physics = new CategoryInfo { Name = "Physics", Icon = "⚙", AccentColor = new Color(0.32f, 0.61f, 1f) };
-            var lighting = new CategoryInfo { Name = "Lighting", Icon = "💡", AccentColor = new Color(1f, 0.84f, 0f) };
-            var audio = new CategoryInfo { Name = "Audio", Icon = "🔊", AccentColor = new Color(1f, 0.4f, 0.4f) };
-            var xr = new CategoryInfo { Name = "XR", Icon = "🎮", AccentColor = new Color(0.22f, 0.91f, 0.22f) };
-            var anim = new CategoryInfo { Name = "Animation", Icon = "🧩", AccentColor = new Color(1f, 0.54f, 0f) };
-
-            foreach (var comp in comps)
-            {
-                if (comp == null || comp is Transform || comp is HierarchyHeader) continue;
-
-                string rawName = comp.GetType().Name;
-                string cleanName = SplitPascalCase(rawName);
-
-                bool isUnityComponent = comp.GetType().Namespace != null && 
-                                       (comp.GetType().Namespace.StartsWith("UnityEngine") || 
-                                        comp.GetType().Namespace.StartsWith("UnityEditor") ||
-                                        comp.GetType().Namespace.StartsWith("Unity"));
-
-                bool isCustomScript = comp is MonoBehaviour && !isUnityComponent;
-
-                if (isCustomScript)
-                {
-                    scripts.Components.Add(cleanName);
-                }
-                else
-                {
-                    // Map Unity components
-                    Type t = comp.GetType();
-                    if (t.Name.Contains("Camera") || t.Name.Contains("Renderer") || t.Name.Contains("Canvas"))
-                    {
-                        rendering.Components.Add(cleanName);
-                    }
-                    else if (comp is Collider || comp is Collider2D || comp is Rigidbody || comp is Rigidbody2D || t.Name.Contains("Joint"))
-                    {
-                        physics.Components.Add(cleanName);
-                    }
-                    else if (comp is Light || comp is ReflectionProbe || t.Name.Contains("Light"))
-                    {
-                        lighting.Components.Add(cleanName);
-                    }
-                    else if (comp is AudioSource || comp is AudioListener || t.Name.Contains("Audio"))
-                    {
-                        audio.Components.Add(cleanName);
-                    }
-                    else if (t.Name.Contains("XR") || t.Name.Contains("XROrigin") || t.Name.Contains("Interactor"))
-                    {
-                        xr.Components.Add(cleanName);
-                    }
-                    else if (comp is Animator || comp is Animation)
-                    {
-                        anim.Components.Add(cleanName);
-                    }
-                    else
-                    {
-                        // Fallback to rendering or physics based on class
-                        physics.Components.Add(cleanName);
-                    }
-                }
-            }
-
-            if (scripts.Components.Count > 0) categories.Add(scripts);
-            if (rendering.Components.Count > 0) categories.Add(rendering);
-            if (physics.Components.Count > 0) categories.Add(physics);
-            if (lighting.Components.Count > 0) categories.Add(lighting);
-            if (audio.Components.Count > 0) categories.Add(audio);
-            if (xr.Components.Count > 0) categories.Add(xr);
-            if (anim.Components.Count > 0) categories.Add(anim);
-
-            return categories;
-        }
-
-        private static string SplitPascalCase(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return input;
-            return System.Text.RegularExpressions.Regex.Replace(input, "([a-z])([A-Z])", "$1 $2");
-        }
-
-        private void OnEnable()
-        {
-            instance = this;
         }
 
         private void Update()
@@ -232,7 +314,6 @@ namespace HierarchyDesigner
 
             if (mouseOver != this)
             {
-                // Mouse is over the hierarchy window, verify it stays within target row or popup bounds (plus 12px buffer)
                 Rect bufferPopupRect = new Rect(position.x - 12f, position.y - 12f, position.width + 24f, position.height + 24f);
                 if (!targetRowScreenRect.Contains(mouseScreenPosition) && !bufferPopupRect.Contains(mouseScreenPosition))
                 {
@@ -249,189 +330,371 @@ namespace HierarchyDesigner
                 return;
             }
 
-            // Apply fade alpha and scale translation matrix
             Color guiColor = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, fadeAlpha);
 
-            // Outer Card Rounded Background (9-slice)
+            // Card background 9-slice
             GUIStyle cardStyle = new GUIStyle();
             cardStyle.normal.background = GetOrCreateCardTexture();
             cardStyle.border = new RectOffset(8, 8, 8, 8);
 
             GUILayout.BeginArea(new Rect(0, 0, position.width, position.height), cardStyle);
             
-            // Header Bar
+            // Header row with Name and Active Status
             DrawHeader();
 
-            // Scrollable Content
-            var categories = GetCategorizedComponents();
-            float contentHeight = position.height - 44f - 48f; // height minus header and footer
-            
-            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(contentHeight));
-            GUILayout.BeginVertical();
-            GUILayout.Space(6);
+            // Search Bar
+            DrawSearchBar();
 
-            for (int i = 0; i < categories.Count; i++)
+            if (totalComponentCount == 0)
             {
-                DrawCategory(categories[i]);
-                if (i < categories.Count - 1)
+                DrawEmptyState();
+            }
+            else
+            {
+                // Component Categories List
+                float contentHeight = position.height - 48f - 32f - 84f; // subtracting header, search, and grid footer
+                scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(contentHeight));
+                GUILayout.BeginVertical();
+                GUILayout.Space(4);
+
+                foreach (var group in cachedCategories)
                 {
-                    DrawCategoryDivider();
+                    if (group.FilteredItems.Count == 0) continue;
+                    DrawCategoryGroup(group);
                 }
+
+                GUILayout.EndVertical();
+                EditorGUILayout.EndScrollView();
             }
 
-            GUILayout.EndVertical();
-            EditorGUILayout.EndScrollView();
-
-            // Footer (Metadata cards)
-            DrawFooter();
+            // Interactive Grid Footer (Tag, Layer, Static, Active controls)
+            DrawGridFooter();
 
             GUILayout.EndArea();
-
             GUI.color = guiColor;
         }
 
         private void DrawHeader()
         {
-            Rect headerRect = GUILayoutUtility.GetRect(0f, 40f);
+            Rect rect = GUILayoutUtility.GetRect(0f, 48f);
             
-            // Lighter header background
-            EditorGUI.DrawRect(headerRect, HeaderBgColor);
-            
-            // Bottom header border
-            EditorGUI.DrawRect(new Rect(headerRect.x, headerRect.yMax - 1f, headerRect.width, 1f), BorderColor);
+            // Draw lighter header background
+            EditorGUI.DrawRect(rect, HeaderBgColor);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), BorderColor);
 
-            // Left icon & label
-            GUIStyle headerLabelStyle = new GUIStyle(EditorStyles.boldLabel)
+            // Icon box
+            Texture2D goIcon = EditorGUIUtility.ObjectContent(targetGameObject, typeof(GameObject)).image as Texture2D;
+            if (goIcon != null)
+            {
+                GUI.DrawTexture(new Rect(rect.x + 12f, rect.y + 14f, 20f, 20f), goIcon);
+            }
+
+            // Title label
+            GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
             {
                 fontSize = 13,
                 alignment = TextAnchor.MiddleLeft,
                 normal = { textColor = Color.white }
             };
-            
-            GUI.Label(new Rect(headerRect.x + 12f, headerRect.y, 150f, headerRect.height), "📦  Components", headerLabelStyle);
+            GUI.Label(new Rect(rect.x + 38f, rect.y + 6f, 200f, 20f), targetGameObject.name, titleStyle);
 
-            // Right count badge
-            int totalCount = targetGameObject.GetComponents<Component>().Length - 1; // subtract transform
-            GUIStyle badgeStyle = new GUIStyle(EditorStyles.boldLabel)
+            // Subtitle status (Static & Active labels)
+            GUIStyle subtitleStyle = new GUIStyle(EditorStyles.miniLabel)
             {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 11,
-                normal = { textColor = Color.white }
+                fontSize = 9,
+                richText = true,
+                normal = { textColor = new Color(0.6f, 0.6f, 0.6f) }
             };
+            string staticStr = targetGameObject.isStatic ? "<color=#5bc266>Static</color>" : "Static";
+            string activeStr = targetGameObject.activeSelf ? "<color=#5bc266>Active</color>" : "<color=#e05e5e>Inactive</color>";
+            GUI.Label(new Rect(rect.x + 38f, rect.y + 24f, 200f, 16f), $"{staticStr}  •  {activeStr}", subtitleStyle);
 
-            Rect badgeRect = new Rect(headerRect.xMax - 32f, headerRect.y + 11f, 20f, 18f);
-            
-            // Rounded count badge background
-            GUIStyle capsuleStyle = new GUIStyle();
-            capsuleStyle.normal.background = GetOrCreateHeaderTexture();
-            capsuleStyle.border = new RectOffset(6, 6, 6, 6);
-            GUI.Box(badgeRect, "", capsuleStyle);
-            
-            GUI.Label(badgeRect, totalCount.ToString(), badgeStyle);
-        }
-
-        private void DrawCategory(CategoryInfo cat)
-        {
-            GUILayout.Space(4);
-            
-            // Category Header Row
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(12f);
-
-            GUIStyle catIconStyle = new GUIStyle(EditorStyles.label)
-            {
-                fontSize = 13,
-                alignment = TextAnchor.MiddleLeft
-            };
-            GUILayout.Label(cat.Icon, catIconStyle, GUILayout.Width(18f));
-
-            GUIStyle catNameStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                fontSize = 12,
-                normal = { textColor = cat.AccentColor }
-            };
-            GUILayout.Label(cat.Name, catNameStyle);
-
-            GUILayout.FlexibleSpace();
-
-            // Category Count badge
+            // Total badge
             GUIStyle badgeStyle = new GUIStyle(EditorStyles.boldLabel)
             {
                 alignment = TextAnchor.MiddleCenter,
                 fontSize = 10,
-                normal = { textColor = new Color(0.8f, 0.8f, 0.8f) }
+                normal = { textColor = Color.white }
             };
-            
-            Rect badgeRect = GUILayoutUtility.GetRect(18f, 16f);
-            badgeRect.y += 2f;
+            Rect badgeRect = new Rect(rect.xMax - 32f, rect.y + 16f, 20f, 17f);
             
             GUIStyle capsuleStyle = new GUIStyle();
             capsuleStyle.normal.background = GetOrCreateHeaderTexture();
             capsuleStyle.border = new RectOffset(6, 6, 6, 6);
             GUI.Box(badgeRect, "", capsuleStyle);
             
-            GUI.Label(badgeRect, cat.Components.Count.ToString(), badgeStyle);
-            GUILayout.Space(12f);
-            GUILayout.EndHorizontal();
+            GUI.Label(badgeRect, totalComponentCount.ToString(), badgeStyle);
+        }
 
-            // Items list
+        private void DrawSearchBar()
+        {
+            Rect rect = GUILayoutUtility.GetRect(0f, 32f);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), DividerColor);
+
+            GUIStyle searchStyle = new GUIStyle(EditorStyles.textField)
+            {
+                fontSize = 11,
+                alignment = TextAnchor.MiddleLeft,
+                margin = new RectOffset(12, 12, 6, 6)
+            };
+
+            GUILayout.BeginArea(new Rect(rect.x + 12f, rect.y + 5f, rect.width - 24f, 22f));
+            EditorGUI.BeginChangeCheck();
+            
+            GUI.SetNextControlName("SearchField");
+            searchQuery = EditorGUILayout.TextField("", searchQuery, searchStyle);
+            
+            if (EditorGUI.EndChangeCheck())
+            {
+                FilterComponents();
+            }
+            GUILayout.EndArea();
+
+            // Search placeholder text
+            if (string.IsNullOrEmpty(searchQuery))
+            {
+                GUIStyle placeholderStyle = new GUIStyle(EditorStyles.miniLabel)
+                {
+                    fontSize = 10,
+                    normal = { textColor = new Color(0.45f, 0.45f, 0.45f) }
+                };
+                GUI.Label(new Rect(rect.x + 18f, rect.y + 7f, 200f, 18f), "🔍 Search components...", placeholderStyle);
+            }
+        }
+
+        private void DrawCategoryGroup(CategoryGroup group)
+        {
+            CategoryCollapsedStates.TryGetValue(group.Name, out bool collapsed);
+
+            Rect rect = GUILayoutUtility.GetRect(0f, 24f);
+
+            // Hover row highlight
+            if (Event.current.type == EventType.Repaint && rect.Contains(Event.current.mousePosition))
+            {
+                EditorGUI.DrawRect(rect, new Color(1f, 1f, 1f, 0.04f));
+            }
+
+            // Click header to toggle collapse
+            if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition) && Event.current.button == 0)
+            {
+                collapsed = !collapsed;
+                CategoryCollapsedStates[group.Name] = collapsed;
+                Event.current.Use();
+            }
+
+            // Toggle arrow symbol
+            string arrow = collapsed ? "▶" : "▼";
+            GUIStyle arrowStyle = new GUIStyle(EditorStyles.label)
+            {
+                fontSize = 10,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.6f, 0.6f, 0.6f) }
+            };
+            GUI.Label(new Rect(rect.x + 8f, rect.y + 4f, 16f, 16f), arrow, arrowStyle);
+
+            // Category title (with specific theme colored text)
+            GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                fontSize = 11,
+                normal = { textColor = group.TitleColor }
+            };
+            GUI.Label(new Rect(rect.x + 24f, rect.y + 4f, 150f, 16f), $"{group.IconStr}  {group.Name}", titleStyle);
+
+            // Group count badge
+            GUIStyle countStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 9,
+                normal = { textColor = new Color(0.8f, 0.8f, 0.8f) }
+            };
+            Rect badgeRect = new Rect(rect.xMax - 32f, rect.y + 4f, 18f, 15f);
+            
+            GUIStyle capsuleStyle = new GUIStyle();
+            capsuleStyle.normal.background = GetOrCreateHeaderTexture();
+            capsuleStyle.border = new RectOffset(6, 6, 6, 6);
+            GUI.Box(badgeRect, "", capsuleStyle);
+            GUI.Label(badgeRect, group.FilteredItems.Count.ToString(), countStyle);
+
+            // Draw children items if expanded
+            if (!collapsed)
+            {
+                foreach (var item in group.FilteredItems)
+                {
+                    DrawComponentRow(item);
+                }
+            }
+            GUILayout.Space(6);
+        }
+
+        private void DrawComponentRow(CachedComponent item)
+        {
+            Rect rect = GUILayoutUtility.GetRect(0f, 22f);
+
+            // Row highlight hover effect
+            bool isHovered = rect.Contains(Event.current.mousePosition);
+            if (Event.current.type == EventType.Repaint && isHovered)
+            {
+                EditorGUI.DrawRect(rect, new Color(1f, 1f, 1f, 0.05f));
+            }
+
+            // Context Menu activation
+            if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
+            {
+                if (Event.current.button == 1) // Right Click
+                {
+                    ShowComponentContextMenu(item);
+                    Event.current.Use();
+                }
+            }
+
+            // Component Icon (Unity official icon)
+            if (item.Icon != null)
+            {
+                GUI.DrawTexture(new Rect(rect.x + 28f, rect.y + 3f, 16f, 16f), item.Icon);
+            }
+
+            // Component Clean text
             GUIStyle itemStyle = new GUIStyle(EditorStyles.label)
             {
                 fontSize = 11,
-                normal = { textColor = new Color(0.85f, 0.85f, 0.85f, 1f) }
+                normal = { textColor = isHovered ? Color.white : new Color(0.85f, 0.85f, 0.85f) }
+            };
+            GUI.Label(new Rect(rect.x + 48f, rect.y + 3f, Width - 80f, 16f), item.CleanName, itemStyle);
+
+            // Options Context Menu button on Hover
+            if (isHovered)
+            {
+                Rect contextBtnRect = new Rect(rect.xMax - 26f, rect.y + 2f, 18f, 18f);
+                GUIStyle contextStyle = new GUIStyle(EditorStyles.miniButton)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    padding = new RectOffset(0, 0, 0, 0)
+                };
+                if (GUI.Button(contextBtnRect, "⋮", contextStyle))
+                {
+                    ShowComponentContextMenu(item);
+                }
+            }
+        }
+
+        private void ShowComponentContextMenu(CachedComponent item)
+        {
+            GenericMenu menu = new GenericMenu();
+            menu.AddItem(new GUIContent("Ping GameObject"), false, () => EditorGUIUtility.PingObject(targetGameObject));
+            menu.AddItem(new GUIContent("Highlight In Inspector"), false, () => {
+                Selection.activeGameObject = targetGameObject;
+                Highlighter.Highlight("Inspector", item.Component.GetType().Name);
+            });
+            menu.AddSeparator("");
+            menu.AddItem(new GUIContent("Copy Component Name"), false, () => EditorGUIUtility.systemCopyBuffer = item.CleanName);
+            menu.AddItem(new GUIContent("Copy Component Type"), false, () => EditorGUIUtility.systemCopyBuffer = item.Component.GetType().FullName);
+            menu.ShowAsContext();
+        }
+
+        private void DrawEmptyState()
+        {
+            GUILayout.BeginVertical();
+            GUILayout.Space(24f);
+
+            GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                fontSize = 12,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.6f, 0.6f, 0.6f) }
+            };
+            GUIStyle bodyStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                fontSize = 10,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.45f, 0.45f, 0.45f) }
             };
 
-            foreach (var compName in cat.Components)
-            {
-                // Hover effect highlight check
-                Rect itemRect = GUILayoutUtility.GetRect(0f, 18f);
-                if (Event.current.type == EventType.Repaint && itemRect.Contains(Event.current.mousePosition))
-                {
-                    EditorGUI.DrawRect(itemRect, new Color(1f, 1f, 1f, 0.05f));
-                }
+            GUILayout.Label("📂  No Components Found", titleStyle);
+            GUILayout.Label("This GameObject only contains a Transform component.", bodyStyle);
 
-                // Dot accent color matches category accent color
-                string bulletText = $"   <color=#{ColorUtility.ToHtmlStringRGBA(cat.AccentColor)}>•</color>  {compName}";
-                GUIStyle richItemStyle = new GUIStyle(itemStyle) { richText = true };
-                GUI.Label(new Rect(itemRect.x + 8f, itemRect.y, itemRect.width - 8f, itemRect.height), bulletText, richItemStyle);
-            }
-            GUILayout.Space(4);
+            GUILayout.EndVertical();
         }
 
-        private void DrawCategoryDivider()
+        private void DrawGridFooter()
         {
-            Rect dividerRect = GUILayoutUtility.GetRect(0f, 8f);
-            EditorGUI.DrawRect(new Rect(dividerRect.x + 12f, dividerRect.y + 3f, dividerRect.width - 24f, 1f), DividerColor);
-        }
-
-        private void DrawFooter()
-        {
-            Rect footerRect = new Rect(0f, position.height - 48f, position.width, 48f);
+            Rect rect = new Rect(0f, position.height - 84f, position.width, 84f);
             
-            // Draw separator line
-            EditorGUI.DrawRect(new Rect(footerRect.x, footerRect.y, footerRect.width, 1f), BorderColor);
-            EditorGUI.DrawRect(new Rect(footerRect.x, footerRect.y + 1f, footerRect.width, footerRect.height - 1f), HeaderBgColor);
+            // Separator lines
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), BorderColor);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y + 1f, rect.width, rect.height - 1f), HeaderBgColor);
 
-            // Display Tag, Layer, and States
-            string tag = targetGameObject.tag;
-            string layer = LayerMask.LayerToName(targetGameObject.layer);
-            bool isActive = targetGameObject.activeSelf;
-            bool isStatic = targetGameObject.isStatic;
+            // Draw grid dividers
+            float midX = rect.x + rect.width * 0.5f;
+            float midY = rect.y + 44f;
+            EditorGUI.DrawRect(new Rect(midX, rect.y + 4f, 1f, 76f), DividerColor);
+            EditorGUI.DrawRect(new Rect(rect.x + 8f, midY, rect.width - 16f, 1f), DividerColor);
+
+            // Grid cell coordinates
+            Rect cellTag = new Rect(rect.x + 12f, rect.y + 6f, midX - 20f, 32f);
+            Rect cellLayer = new Rect(midX + 12f, rect.y + 6f, midX - 20f, 32f);
+            Rect cellStatic = new Rect(rect.x + 12f, midY + 6f, midX - 20f, 32f);
+            Rect cellActive = new Rect(midX + 12f, midY + 6f, midX - 20f, 32f);
 
             GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
             {
                 fontSize = 9,
-                normal = { textColor = new Color(0.7f, 0.7f, 0.7f) }
+                normal = { textColor = new Color(0.55f, 0.55f, 0.55f) }
             };
 
-            float y = footerRect.y + 6f;
-            GUI.Label(new Rect(12f, y, 110f, 16f), $"🏷️ Tag: {tag}", labelStyle);
-            GUI.Label(new Rect(130f, y, 110f, 16f), $"📍 Layer: {layer}", labelStyle);
+            // Cell 1: Tag Selector
+            GUI.Label(new Rect(cellTag.x, cellTag.y, 80f, 12f), "🏷️ Tag", labelStyle);
+            EditorGUI.BeginChangeCheck();
+            string newTag = EditorGUI.TagField(new Rect(cellTag.x, cellTag.y + 12f, cellTag.width - 10f, 16f), targetGameObject.tag);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(targetGameObject, "Change Tag");
+                targetGameObject.tag = newTag;
+            }
 
-            float yBottom = y + 16f;
-            GUI.Label(new Rect(12f, yBottom, 110f, 16f), isActive ? "⚡ Active: Yes" : "⚡ Active: No", labelStyle);
-            GUI.Label(new Rect(130f, yBottom, 110f, 16f), isStatic ? "🌍 Static: Yes" : "🌍 Static: No", labelStyle);
+            // Cell 2: Layer Selector
+            GUI.Label(new Rect(cellLayer.x, cellLayer.y, 80f, 12f), "📍 Layer", labelStyle);
+            EditorGUI.BeginChangeCheck();
+            int newLayer = EditorGUI.LayerField(new Rect(cellLayer.x, cellLayer.y + 12f, cellLayer.width - 10f, 16f), targetGameObject.layer);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(targetGameObject, "Change Layer");
+                targetGameObject.layer = newLayer;
+            }
+
+            // Cell 3: Static Selector
+            GUI.Label(new Rect(cellStatic.x, cellStatic.y, 80f, 12f), "🌍 Static", labelStyle);
+            EditorGUI.BeginChangeCheck();
+            bool newStatic = EditorGUI.Toggle(new Rect(cellStatic.x, cellStatic.y + 12f, 16f, 16f), targetGameObject.isStatic);
+            GUIStyle toggleLabelStyle = new GUIStyle(EditorStyles.miniLabel) { fontSize = 10 };
+            GUI.Label(new Rect(cellStatic.x + 20f, cellStatic.y + 12f, 80f, 16f), newStatic ? "Yes" : "No", toggleLabelStyle);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(targetGameObject, "Change Static");
+                targetGameObject.isStatic = newStatic;
+            }
+
+            // Cell 4: Active State Selector
+            GUI.Label(new Rect(cellActive.x, cellActive.y, 80f, 12f), "⚡ Active", labelStyle);
+            EditorGUI.BeginChangeCheck();
+            bool newActive = EditorGUI.Toggle(new Rect(cellActive.x, cellActive.y + 12f, 16f, 16f), targetGameObject.activeSelf);
+            GUI.Label(new Rect(cellActive.x + 20f, cellActive.y + 12f, 80f, 16f), newActive ? "Yes" : "No", toggleLabelStyle);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(targetGameObject, "Change Active");
+                targetGameObject.SetActive(newActive);
+            }
+        }
+
+        private static string SplitPascalCase(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
+            return System.Text.RegularExpressions.Regex.Replace(input, "([a-z])([A-Z])", "$1 $2");
+        }
+
+        private void OnEnable()
+        {
+            instance = this;
         }
 
         private static Texture2D GetOrCreateCardTexture()
@@ -493,7 +756,7 @@ namespace HierarchyDesigner
             int height = 12;
             headerTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             int r = 6;
-            Color bg = new Color(0.25f, 0.25f, 0.26f, 1f); // pill badge background
+            Color bg = new Color(0.25f, 0.25f, 0.26f, 1f); // badge background
             
             for (int y = 0; y < height; y++)
             {
