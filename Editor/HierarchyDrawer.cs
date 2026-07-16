@@ -25,12 +25,12 @@ namespace HierarchyDesigner.Editor
         // Rainbow color sequence for nesting lines
         private static readonly Color[] RainbowColors = new Color[]
         {
-            new Color(0.9f, 0.3f, 0.3f, 0.35f),  // Muted Red
-            new Color(0.9f, 0.6f, 0.2f, 0.35f),  // Muted Orange
-            new Color(0.9f, 0.8f, 0.2f, 0.35f),  // Muted Yellow
-            new Color(0.3f, 0.8f, 0.4f, 0.35f),  // Muted Green
-            new Color(0.2f, 0.6f, 0.9f, 0.35f),  // Muted Blue
-            new Color(0.6f, 0.3f, 0.9f, 0.35f)   // Muted Violet
+            new Color(0.9f, 0.3f, 0.3f, 0.75f),  // Muted Red
+            new Color(0.9f, 0.6f, 0.2f, 0.75f),  // Muted Orange
+            new Color(0.9f, 0.8f, 0.2f, 0.75f),  // Muted Yellow
+            new Color(0.3f, 0.8f, 0.4f, 0.75f),  // Muted Green
+            new Color(0.2f, 0.6f, 0.9f, 0.75f),  // Muted Blue
+            new Color(0.6f, 0.3f, 0.9f, 0.75f)   // Muted Violet
         };
 
         #endregion
