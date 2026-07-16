@@ -440,9 +440,8 @@ namespace HierarchyDesigner.Editor
         {
             if (cachedDatabase == null) return;
 
-            // 1. Determine base colors
+            // 1. Determine base colors (no colored background)
             Color textColor = cachedDatabase.ChildCountTextColor;
-            Color bgColor = cachedDatabase.ChildCountBgColor;
             Color borderColor = cachedDatabase.ChildCountBorderColor;
 
             if (cachedDatabase.ChildCountColorMode == HierarchyChildCountColorMode.InheritNestingColor)
@@ -466,39 +465,14 @@ namespace HierarchyDesigner.Editor
                     baseNestingColor = activeRainbowColors[activeDepth % activeRainbowColors.Length];
                 }
                 
-                // Inherit color for background (faded) and border (solid)
-                bgColor = new Color(baseNestingColor.r, baseNestingColor.g, baseNestingColor.b, baseNestingColor.a * opacity * 0.22f);
+                // Inherit color for text and border
+                textColor = new Color(baseNestingColor.r, baseNestingColor.g, baseNestingColor.b, baseNestingColor.a * opacity);
                 borderColor = new Color(baseNestingColor.r, baseNestingColor.g, baseNestingColor.b, baseNestingColor.a * opacity);
             }
 
-            // 2. Draw background and borders
+            // 2. Draw border
             HierarchyChildCountBorderStyle style = cachedDatabase.ChildCountBorderStyle;
-
-            if (style == HierarchyChildCountBorderStyle.Solid || style == HierarchyChildCountBorderStyle.SolidWithOutline)
-            {
-                Texture2D pillTex = GetOrCreatePillTexture(bgColor);
-                if (pillTex != null)
-                {
-                    GUI.DrawTexture(rect, pillTex, ScaleMode.StretchToFill);
-                }
-                else
-                {
-                    EditorGUI.DrawRect(rect, bgColor);
-                }
-            }
-
-            if (style == HierarchyChildCountBorderStyle.Outline || style == HierarchyChildCountBorderStyle.SolidWithOutline)
-            {
-                Color borderCol = borderColor;
-                // Top line
-                EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), borderCol);
-                // Bottom line
-                EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), borderCol);
-                // Left line
-                EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), borderCol);
-                // Right line
-                EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), borderCol);
-            }
+            DrawBadgeBorder(rect, borderColor, style);
 
             // 3. Draw text label
             GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
@@ -510,6 +484,85 @@ namespace HierarchyDesigner.Editor
             
             string text = (style == HierarchyChildCountBorderStyle.None) ? $"[ {count} ]" : $"{count}";
             GUI.Label(rect, text, labelStyle);
+        }
+
+        private static void DrawBadgeBorder(Rect rect, Color color, HierarchyChildCountBorderStyle style)
+        {
+            if (style == HierarchyChildCountBorderStyle.None) return;
+
+            if (style == HierarchyChildCountBorderStyle.Solid)
+            {
+                EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), color);
+                EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color);
+                EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), color);
+                EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color);
+            }
+            else if (style == HierarchyChildCountBorderStyle.Dashed)
+            {
+                DrawSeparatorLine(new Rect(rect.x, rect.y, rect.width, 1f), color, HierarchyLineStyle.Dashed);
+                DrawSeparatorLine(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color, HierarchyLineStyle.Dashed);
+                DrawSeparatorLineVertical(new Rect(rect.x, rect.y, 1f, rect.height), color, HierarchyLineStyle.Dashed);
+                DrawSeparatorLineVertical(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color, HierarchyLineStyle.Dashed);
+            }
+            else if (style == HierarchyChildCountBorderStyle.Dotted)
+            {
+                DrawSeparatorLine(new Rect(rect.x, rect.y, rect.width, 1f), color, HierarchyLineStyle.Dotted);
+                DrawSeparatorLine(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color, HierarchyLineStyle.Dotted);
+                DrawSeparatorLineVertical(new Rect(rect.x, rect.y, 1f, rect.height), color, HierarchyLineStyle.Dotted);
+                DrawSeparatorLineVertical(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color, HierarchyLineStyle.Dotted);
+            }
+            else if (style == HierarchyChildCountBorderStyle.Double)
+            {
+                // Outer Solid Border
+                EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), color);
+                EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color);
+                EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), color);
+                EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color);
+                // Inner Solid Border offset by 2px
+                if (rect.width > 4f && rect.height > 4f)
+                {
+                    EditorGUI.DrawRect(new Rect(rect.x + 2f, rect.y + 2f, rect.width - 4f, 1f), color);
+                    EditorGUI.DrawRect(new Rect(rect.x + 2f, rect.yMax - 3f, rect.width - 4f, 1f), color);
+                    EditorGUI.DrawRect(new Rect(rect.x + 2f, rect.y + 2f, 1f, rect.height - 4f), color);
+                    EditorGUI.DrawRect(new Rect(rect.xMax - 3f, rect.y + 2f, 1f, rect.height - 4f), color);
+                }
+            }
+        }
+
+        private static void DrawSeparatorLineVertical(Rect rect, Color color, HierarchyLineStyle style)
+        {
+            if (style == HierarchyLineStyle.None) return;
+
+            if (style == HierarchyLineStyle.Solid)
+            {
+                EditorGUI.DrawRect(rect, color);
+            }
+            else if (style == HierarchyLineStyle.Dashed)
+            {
+                float dashLength = 3f;
+                float gapLength = 2f;
+                float currentY = rect.y;
+                float endY = rect.yMax;
+                while (currentY < endY)
+                {
+                    float drawHeight = Mathf.Min(dashLength, endY - currentY);
+                    EditorGUI.DrawRect(new Rect(rect.x, currentY, rect.width, drawHeight), color);
+                    currentY += dashLength + gapLength;
+                }
+            }
+            else if (style == HierarchyLineStyle.Dotted)
+            {
+                float dotLength = rect.width;
+                float gapLength = 2f;
+                float currentY = rect.y;
+                float endY = rect.yMax;
+                while (currentY < endY)
+                {
+                    float drawHeight = Mathf.Min(dotLength, endY - currentY);
+                    EditorGUI.DrawRect(new Rect(rect.x, currentY, rect.width, drawHeight), color);
+                    currentY += dotLength + gapLength;
+                }
+            }
         }
 
         /// <summary>

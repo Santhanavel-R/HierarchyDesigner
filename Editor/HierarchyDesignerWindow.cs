@@ -34,7 +34,6 @@ namespace HierarchyDesigner.Editor
         private SerializedProperty childCountColorModeProperty;
         private SerializedProperty childCountBorderStyleProperty;
         private SerializedProperty childCountTextColorProperty;
-        private SerializedProperty childCountBgColorProperty;
         private SerializedProperty childCountBorderColorProperty;
 
         private ReorderableList headerList;
@@ -140,7 +139,6 @@ namespace HierarchyDesigner.Editor
                 childCountColorModeProperty = serializedDatabase.FindProperty("childCountColorMode");
                 childCountBorderStyleProperty = serializedDatabase.FindProperty("childCountBorderStyle");
                 childCountTextColorProperty = serializedDatabase.FindProperty("childCountTextColor");
-                childCountBgColorProperty = serializedDatabase.FindProperty("childCountBgColor");
                 childCountBorderColorProperty = serializedDatabase.FindProperty("childCountBorderColor");
 
                 SetupReorderableList();
@@ -218,19 +216,66 @@ namespace HierarchyDesigner.Editor
 
         private void DrawHeaderTitle()
         {
-            GUILayout.BeginVertical(EditorStyles.helpBox);
+            Rect bannerRect = GUILayoutUtility.GetRect(0f, 48f);
+            
+            // Draw background
+            Color bg = EditorGUIUtility.isProSkin ? new Color(0.15f, 0.15f, 0.15f, 1.0f) : new Color(0.85f, 0.85f, 0.85f, 1.0f);
+            EditorGUI.DrawRect(bannerRect, bg);
+            
+            // Left blue accent stripe
+            Rect accentStripe = new Rect(bannerRect.x, bannerRect.y, 4f, bannerRect.height);
+            EditorGUI.DrawRect(accentStripe, new Color(0.24f, 0.48f, 0.9f, 1f));
+            
+            // Top and bottom borders
+            Rect topLine = new Rect(bannerRect.x, bannerRect.y, bannerRect.width, 1f);
+            EditorGUI.DrawRect(topLine, EditorGUIUtility.isProSkin ? new Color(0.25f, 0.25f, 0.25f) : new Color(0.75f, 0.75f, 0.75f));
+            Rect bottomLine = new Rect(bannerRect.x, bannerRect.yMax - 1f, bannerRect.width, 1f);
+            EditorGUI.DrawRect(bottomLine, EditorGUIUtility.isProSkin ? new Color(0.1f, 0.1f, 0.1f) : new Color(0.6f, 0.6f, 0.6f));
+
+            // Title label
+            GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                fontSize = 13,
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = Color.white }
+            };
+            if (!EditorGUIUtility.isProSkin) titleStyle.normal.textColor = Color.black;
+            
+            Rect titleRect = new Rect(bannerRect.x + 14f, bannerRect.y + 8f, bannerRect.width - 20f, 18f);
+            GUI.Label(titleRect, "✨ HIERARCHY DESIGNER", titleStyle);
+            
+            // Subtitle label
+            GUIStyle subtitleStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                normal = { textColor = EditorGUIUtility.isProSkin ? new Color(0.7f, 0.7f, 0.7f) : new Color(0.3f, 0.3f, 0.3f) }
+            };
+            Rect subtitleRect = new Rect(bannerRect.x + 14f, bannerRect.y + 24f, bannerRect.width - 20f, 16f);
+            GUI.Label(subtitleRect, "Organize Unity hierarchy visually with custom separator presets.", subtitleStyle);
+            
             GUILayout.Space(6);
-            GUILayout.Label("✨ HIERARCHY DESIGNER", EditorStyles.boldLabel);
-            GUILayout.Label("Organize Unity hierarchy visually with custom presets.", EditorStyles.miniLabel);
-            GUILayout.Space(6);
-            GUILayout.EndVertical();
+        }
+
+        private void DrawGroupHeader(string title, string emoji)
+        {
+            GUILayout.Space(2f);
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(2f);
+            GUIStyle groupTitleStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                fontSize = 11,
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = EditorGUIUtility.isProSkin ? new Color(0.85f, 0.85f, 0.85f) : new Color(0.15f, 0.15f, 0.15f) }
+            };
+            GUILayout.Label($"{emoji}  {title.ToUpperInvariant()}", groupTitleStyle);
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4f);
         }
 
         private void DrawThemePresetCards()
         {
             GUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Label("🎨 Visual Color Theme Presets", EditorStyles.boldLabel);
-            GUILayout.Space(4);
+            DrawGroupHeader("Visual Color Theme Presets", "🎨");
+            GUILayout.Space(2f);
 
             // Fetch theme names
             string[] themeNames = new string[database.Themes.Count];
@@ -336,7 +381,7 @@ namespace HierarchyDesigner.Editor
 
             // Box 1: Global Separation & Styling Settings
             GUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Label("Global Separation & Styling Settings", EditorStyles.boldLabel);
+            DrawGroupHeader("Global Separation & Styling Settings", "📏");
             GUILayout.BeginHorizontal();
             EditorGUILayout.PropertyField(globalLineColorProperty, new GUIContent("Line Color"));
             EditorGUILayout.PropertyField(globalLineStyleProperty, new GUIContent("Line Style"));
@@ -348,7 +393,7 @@ namespace HierarchyDesigner.Editor
 
             // Box 2: Feature Toggles & Configurations
             GUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Label("Feature Toggles & Configurations", EditorStyles.boldLabel);
+            DrawGroupHeader("Feature Toggles & Configurations", "⚙️");
             
             GUILayout.BeginHorizontal();
             EditorGUILayout.PropertyField(showComponentIconsProperty, new GUIContent("Component Icons"));
@@ -360,14 +405,10 @@ namespace HierarchyDesigner.Editor
                 EditorGUI.indentLevel++;
                 EditorGUILayout.PropertyField(childCountColorModeProperty, new GUIContent("Color Mode"));
                 EditorGUILayout.PropertyField(childCountTextColorProperty, new GUIContent("Text Color"));
-                if (childCountColorModeProperty.intValue == (int)HierarchyChildCountColorMode.Custom)
-                {
-                    EditorGUILayout.PropertyField(childCountBgColorProperty, new GUIContent("Background Color"));
-                }
                 
                 EditorGUILayout.PropertyField(childCountBorderStyleProperty, new GUIContent("Border Style"));
-                if (childCountBorderStyleProperty.intValue == (int)HierarchyChildCountBorderStyle.Outline || 
-                    childCountBorderStyleProperty.intValue == (int)HierarchyChildCountBorderStyle.SolidWithOutline)
+                if (childCountColorModeProperty.intValue == (int)HierarchyChildCountColorMode.Custom &&
+                    childCountBorderStyleProperty.intValue != (int)HierarchyChildCountBorderStyle.None)
                 {
                     EditorGUILayout.PropertyField(childCountBorderColorProperty, new GUIContent("Border Color"));
                 }
@@ -391,7 +432,7 @@ namespace HierarchyDesigner.Editor
 
             // Box 3: Nesting Lines Settings
             GUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Label("Nesting Lines Settings", EditorStyles.boldLabel);
+            DrawGroupHeader("Nesting Lines Settings", "🌿");
             
             GUILayout.BeginHorizontal();
             EditorGUILayout.PropertyField(showNestingLinesProperty, new GUIContent("Nesting Lines"), GUILayout.Width(150f));
@@ -422,7 +463,7 @@ namespace HierarchyDesigner.Editor
         private void DrawReorderingControls()
         {
             GUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Label("Modify Hierarchy Sections", EditorStyles.boldLabel);
+            DrawGroupHeader("Modify Hierarchy Sections", "✏️");
 
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("+ Add Section", GUILayout.Height(24f)))
@@ -436,18 +477,34 @@ namespace HierarchyDesigner.Editor
 
         private void DrawBottomButtons()
         {
+            GUILayout.Space(6);
+            Rect separator = GUILayoutUtility.GetRect(0f, 1f);
+            EditorGUI.DrawRect(separator, EditorGUIUtility.isProSkin ? new Color(0.12f, 0.12f, 0.12f) : new Color(0.75f, 0.75f, 0.75f));
+            GUILayout.Space(6);
+
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Create Headers", GUILayout.Height(28f)))
+            GUIStyle primaryBtnStyle = new GUIStyle(GUI.skin.button)
+            {
+                fontStyle = FontStyle.Bold,
+                fontSize = 11,
+                alignment = TextAnchor.MiddleCenter
+            };
+
+            if (GUILayout.Button("Create Headers", primaryBtnStyle, GUILayout.Height(30f)))
             {
                 HierarchyCreator.CreateHeaders(database);
             }
 
-            if (GUILayout.Button("Update Headers", GUILayout.Height(28f)))
+            if (GUILayout.Button("Update Headers", primaryBtnStyle, GUILayout.Height(30f)))
             {
                 HierarchyCreator.UpdateHeaders(database);
             }
 
-            if (GUILayout.Button("Delete Headers", GUILayout.Height(28f)))
+            GUIStyle deleteBtnStyle = new GUIStyle(primaryBtnStyle)
+            {
+                normal = { textColor = new Color(0.9f, 0.35f, 0.35f) }
+            };
+            if (GUILayout.Button("Delete Headers", deleteBtnStyle, GUILayout.Height(30f)))
             {
                 if (EditorUtility.DisplayDialog("Delete Headers", "Are you sure you want to delete all hierarchy headers in the active scene?", "Yes", "No"))
                 {
@@ -458,7 +515,7 @@ namespace HierarchyDesigner.Editor
                 }
             }
 
-            if (GUILayout.Button("Refresh", GUILayout.Height(28f)))
+            if (GUILayout.Button("Refresh", primaryBtnStyle, GUILayout.Height(30f)))
             {
                 HierarchyDrawer.RefreshCache();
                 EditorApplication.RepaintHierarchyWindow();

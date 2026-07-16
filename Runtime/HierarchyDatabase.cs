@@ -31,10 +31,11 @@ namespace HierarchyDesigner.Runtime
     /// </summary>
     public enum HierarchyChildCountBorderStyle
     {
-        None,
-        Outline,
         Solid,
-        SolidWithOutline
+        Dashed,
+        Dotted,
+        Double,
+        None
     }
 
     /// <summary>
@@ -80,15 +81,11 @@ namespace HierarchyDesigner.Runtime
 
         [SerializeField]
         [Tooltip("The border outline/filled style for child count badges.")]
-        private HierarchyChildCountBorderStyle childCountBorderStyle = HierarchyChildCountBorderStyle.None;
+        private HierarchyChildCountBorderStyle childCountBorderStyle = HierarchyChildCountBorderStyle.Solid;
 
         [SerializeField]
         [Tooltip("The text label color inside the child count badge.")]
         private Color childCountTextColor = new Color(0.75f, 0.75f, 0.75f, 1f);
-
-        [SerializeField]
-        [Tooltip("The solid background color of the child count badge (if Custom).")]
-        private Color childCountBgColor = new Color(0.18f, 0.18f, 0.18f, 0.85f);
 
         [SerializeField]
         [Tooltip("The outline border color of the child count badge (if Custom).")]
@@ -155,9 +152,8 @@ namespace HierarchyDesigner.Runtime
             showComponentIcons = true;
             showChildCountBadges = true;
             childCountColorMode = HierarchyChildCountColorMode.InheritNestingColor;
-            childCountBorderStyle = HierarchyChildCountBorderStyle.None;
+            childCountBorderStyle = HierarchyChildCountBorderStyle.Solid;
             childCountTextColor = new Color(0.75f, 0.75f, 0.75f, 1f);
-            childCountBgColor = new Color(0.18f, 0.18f, 0.18f, 0.85f);
             childCountBorderColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
             useRainbowNesting = true;
             rainbowPalette = HierarchyRainbowPalette.Default;
@@ -306,15 +302,6 @@ namespace HierarchyDesigner.Runtime
         {
             get => childCountTextColor;
             set => childCountTextColor = value;
-        }
-
-        /// <summary>
-        /// Gets or sets the child count badge background color.
-        /// </summary>
-        public Color ChildCountBgColor
-        {
-            get => childCountBgColor;
-            set => childCountBgColor = value;
         }
 
         /// <summary>
