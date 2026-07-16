@@ -469,7 +469,7 @@ namespace HierarchyDesigner.Editor
                 {
                     string tooltipText = "Custom Scripts:\n• " + string.Join("\n• ", customScripts);
                     // Draw a transparent label over the selection rect with the tooltip content
-                    GUI.Label(selectionRect, new GUIContent("", tooltipText));
+                    GUI.Label(rect, new GUIContent("", tooltipText));
                 }
             }
         }
