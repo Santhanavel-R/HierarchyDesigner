@@ -404,7 +404,11 @@ namespace HierarchyDesigner.Editor
             {
                 EditorGUI.indentLevel++;
                 EditorGUILayout.PropertyField(childCountColorModeProperty, new GUIContent("Color Mode"));
-                EditorGUILayout.PropertyField(childCountTextColorProperty, new GUIContent("Text Color"));
+                
+                if (childCountColorModeProperty.intValue == (int)HierarchyChildCountColorMode.Custom)
+                {
+                    EditorGUILayout.PropertyField(childCountTextColorProperty, new GUIContent("Text Color"));
+                }
                 
                 EditorGUILayout.PropertyField(childCountBorderStyleProperty, new GUIContent("Border Style"));
                 if (childCountColorModeProperty.intValue == (int)HierarchyChildCountColorMode.Custom &&

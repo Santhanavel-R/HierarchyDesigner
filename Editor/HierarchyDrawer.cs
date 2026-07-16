@@ -486,81 +486,86 @@ namespace HierarchyDesigner.Editor
             GUI.Label(rect, text, labelStyle);
         }
 
+        private static readonly Dictionary<Color, Texture2D> OutlinedPillTextureCache = new Dictionary<Color, Texture2D>();
+
+        private static Texture2D GetOrCreateOutlinedPillTexture(Color color)
+        {
+            if (OutlinedPillTextureCache.TryGetValue(color, out Texture2D tex) && tex != null)
+            {
+                return tex;
+            }
+
+            int width = 32;
+            int height = 16;
+            tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            int radius = 6;
+            int thickness = 1;
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    bool isInsideOutline = false;
+                    
+                    bool isCorner = false;
+                    float dx = 0, dy = 0;
+                    if (x < radius && y < radius) { isCorner = true; dx = x - radius; dy = y - radius; }
+                    else if (x < radius && y >= height - radius) { isCorner = true; dx = x - radius; dy = y - (height - radius); }
+                    else if (x >= width - radius && y < radius) { isCorner = true; dx = x - (width - radius); dy = y - radius; }
+                    else if (x >= width - radius && y >= height - radius) { isCorner = true; dx = x - (width - radius); dy = y - (height - radius); }
+
+                    if (isCorner)
+                    {
+                        float distSq = dx * dx + dy * dy;
+                        float outerRadiusSq = radius * radius;
+                        float innerRadiusSq = (radius - thickness) * (radius - thickness);
+                        if (distSq <= outerRadiusSq && distSq > innerRadiusSq)
+                        {
+                            isInsideOutline = true;
+                        }
+                    }
+                    else
+                    {
+                        bool isHorizontalEdge = y < thickness || y >= height - thickness;
+                        bool isVerticalEdge = x < thickness || x >= width - thickness;
+                        if (isHorizontalEdge || isVerticalEdge)
+                        {
+                            isInsideOutline = true;
+                        }
+                    }
+
+                    tex.SetPixel(x, y, isInsideOutline ? color : Color.clear);
+                }
+            }
+            tex.Apply();
+            OutlinedPillTextureCache[color] = tex;
+            return tex;
+        }
+
         private static void DrawBadgeBorder(Rect rect, Color color, HierarchyChildCountBorderStyle style)
         {
             if (style == HierarchyChildCountBorderStyle.None) return;
 
-            if (style == HierarchyChildCountBorderStyle.Solid)
+            if (style == HierarchyChildCountBorderStyle.ClassicBox)
             {
                 EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), color);
                 EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color);
                 EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), color);
                 EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color);
             }
-            else if (style == HierarchyChildCountBorderStyle.Dashed)
+            else if (style == HierarchyChildCountBorderStyle.ModernPill)
             {
-                DrawSeparatorLine(new Rect(rect.x, rect.y, rect.width, 1f), color, HierarchyLineStyle.Dashed);
-                DrawSeparatorLine(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color, HierarchyLineStyle.Dashed);
-                DrawSeparatorLineVertical(new Rect(rect.x, rect.y, 1f, rect.height), color, HierarchyLineStyle.Dashed);
-                DrawSeparatorLineVertical(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color, HierarchyLineStyle.Dashed);
-            }
-            else if (style == HierarchyChildCountBorderStyle.Dotted)
-            {
-                DrawSeparatorLine(new Rect(rect.x, rect.y, rect.width, 1f), color, HierarchyLineStyle.Dotted);
-                DrawSeparatorLine(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color, HierarchyLineStyle.Dotted);
-                DrawSeparatorLineVertical(new Rect(rect.x, rect.y, 1f, rect.height), color, HierarchyLineStyle.Dotted);
-                DrawSeparatorLineVertical(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color, HierarchyLineStyle.Dotted);
-            }
-            else if (style == HierarchyChildCountBorderStyle.Double)
-            {
-                // Outer Solid Border
-                EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), color);
-                EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color);
-                EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), color);
-                EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color);
-                // Inner Solid Border offset by 2px
-                if (rect.width > 4f && rect.height > 4f)
+                Texture2D pillTex = GetOrCreateOutlinedPillTexture(color);
+                if (pillTex != null)
                 {
-                    EditorGUI.DrawRect(new Rect(rect.x + 2f, rect.y + 2f, rect.width - 4f, 1f), color);
-                    EditorGUI.DrawRect(new Rect(rect.x + 2f, rect.yMax - 3f, rect.width - 4f, 1f), color);
-                    EditorGUI.DrawRect(new Rect(rect.x + 2f, rect.y + 2f, 1f, rect.height - 4f), color);
-                    EditorGUI.DrawRect(new Rect(rect.xMax - 3f, rect.y + 2f, 1f, rect.height - 4f), color);
+                    GUI.DrawTexture(rect, pillTex, ScaleMode.StretchToFill);
                 }
-            }
-        }
-
-        private static void DrawSeparatorLineVertical(Rect rect, Color color, HierarchyLineStyle style)
-        {
-            if (style == HierarchyLineStyle.None) return;
-
-            if (style == HierarchyLineStyle.Solid)
-            {
-                EditorGUI.DrawRect(rect, color);
-            }
-            else if (style == HierarchyLineStyle.Dashed)
-            {
-                float dashLength = 3f;
-                float gapLength = 2f;
-                float currentY = rect.y;
-                float endY = rect.yMax;
-                while (currentY < endY)
+                else
                 {
-                    float drawHeight = Mathf.Min(dashLength, endY - currentY);
-                    EditorGUI.DrawRect(new Rect(rect.x, currentY, rect.width, drawHeight), color);
-                    currentY += dashLength + gapLength;
-                }
-            }
-            else if (style == HierarchyLineStyle.Dotted)
-            {
-                float dotLength = rect.width;
-                float gapLength = 2f;
-                float currentY = rect.y;
-                float endY = rect.yMax;
-                while (currentY < endY)
-                {
-                    float drawHeight = Mathf.Min(dotLength, endY - currentY);
-                    EditorGUI.DrawRect(new Rect(rect.x, currentY, rect.width, drawHeight), color);
-                    currentY += dotLength + gapLength;
+                    EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), color);
+                    EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color);
+                    EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), color);
+                    EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color);
                 }
             }
         }
