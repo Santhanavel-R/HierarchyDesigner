@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using HierarchyDesigner.Runtime;
 
 namespace HierarchyDesigner
 {
@@ -11,72 +10,36 @@ namespace HierarchyDesigner
         private static HierarchyComponentPopup instance;
         private GameObject targetGameObject;
         private Rect targetRowRect;
-        private Vector2 scrollPosition;
         private float fadeAlpha = 0f;
         private double lastTime;
         private float scale = 0.98f;
 
-        private string searchQuery = "";
-        
-        // Cache collapsed states per category to persist during hover
-        private static readonly Dictionary<string, bool> CategoryCollapsedStates = new Dictionary<string, bool>()
-        {
-            { "Scripts", false },
-            { "Rendering", false },
-            { "Physics", false },
-            { "Audio", false },
-            { "Animation", false },
-            { "UI", false },
-            { "Navigation", false },
-            { "AI", false },
-            { "Lighting", false },
-            { "Miscellaneous", false }
-        };
-
-        // Cached Data structures
-        private class CachedComponent
-        {
-            public Component Component;
-            public string CleanName;
-            public Texture2D Icon;
-        }
-
-        private class CategoryGroup
+        private class ScriptItem
         {
             public string Name;
-            public string IconStr;
-            public Color TitleColor;
-            public List<CachedComponent> Items = new List<CachedComponent>();
-            public List<CachedComponent> FilteredItems = new List<CachedComponent>();
+            public Texture2D Icon;
+            public int Count;
         }
 
-        private List<CategoryGroup> cachedCategories = new List<CategoryGroup>();
-        private int totalComponentCount = 0;
-        private int totalFilteredCount = 0;
+        private class UnityComponentItem
+        {
+            public string Name;
+            public Texture2D Icon;
+            public int Count;
+        }
 
-        private const float Width = 280f;
-        private const float MaxHeight = 450f;
+        private List<ScriptItem> customScripts = new List<ScriptItem>();
+        private List<UnityComponentItem> unityComponents = new List<UnityComponentItem>();
+        private int totalComponentCount = 0;
+
+        private const float Width = 260f;
+        private const float MaxHeight = 400f;
 
         // Custom Styles Colors (matching mockup)
         private static readonly Color BgColor = new Color(0.145f, 0.145f, 0.15f, 1f); // #252526
         private static readonly Color HeaderBgColor = new Color(0.18f, 0.18f, 0.19f, 1f); // Slightly lighter
         private static readonly Color BorderColor = new Color(0.25f, 0.25f, 0.26f, 1f); // 1px subtle border
         private static readonly Color DividerColor = new Color(1f, 1f, 1f, 0.08f); // 8% opacity divider
-
-        // Categories Details
-        private static readonly Dictionary<string, (string Icon, Color Color)> CategoryDetails = new Dictionary<string, (string, Color)>()
-        {
-            { "Scripts", ("#", new Color(0.72f, 0.61f, 1f)) },
-            { "Rendering", ("📷", new Color(0.31f, 0.85f, 1f)) },
-            { "Physics", ("⚙", new Color(0.48f, 0.88f, 0.48f)) },
-            { "Audio", ("🔊", new Color(0.22f, 0.91f, 0.91f)) },
-            { "Animation", ("🧩", new Color(1f, 0.64f, 0f)) },
-            { "UI", ("🎨", new Color(1f, 0.41f, 0.7f)) },
-            { "Navigation", ("🗺", new Color(1f, 0.84f, 0f)) },
-            { "AI", ("🧠", new Color(1f, 0.4f, 0.4f)) },
-            { "Lighting", ("💡", new Color(1f, 0.92f, 0.5f)) },
-            { "Miscellaneous", ("📦", new Color(0.7f, 0.7f, 0.7f)) }
-        };
 
         private static Texture2D cardTexture;
         private static Texture2D headerTexture;
@@ -111,7 +74,7 @@ namespace HierarchyDesigner
 
             instance.targetRowRect = rowRect;
 
-            // Resolve target row rect in screen space (since GUI context is active here)
+            // Resolve target row rect in screen space
             Vector2 rowScreenPos = GUIUtility.GUIToScreenPoint(new Vector2(rowRect.x, rowRect.y));
             targetRowScreenRect = new Rect(rowScreenPos.x, rowScreenPos.y, rowRect.width, rowRect.height);
 
@@ -120,121 +83,66 @@ namespace HierarchyDesigner
 
         private void RebuildComponentCache()
         {
-            cachedCategories.Clear();
+            customScripts.Clear();
+            unityComponents.Clear();
             totalComponentCount = 0;
 
             if (targetGameObject == null) return;
 
             var comps = targetGameObject.GetComponents<Component>();
-            var groupDict = new Dictionary<string, CategoryGroup>();
 
-            foreach (var detail in CategoryDetails)
-            {
-                groupDict[detail.Key] = new CategoryGroup
-                {
-                    Name = detail.Key,
-                    IconStr = detail.Value.Icon,
-                    TitleColor = detail.Value.Color
-                };
-            }
+            var scriptDict = new Dictionary<Type, ScriptItem>();
+            var unityDict = new Dictionary<Type, UnityComponentItem>();
 
             foreach (var comp in comps)
             {
-                if (comp == null || comp is Transform || comp is HierarchyHeader) continue;
+                if (comp == null || comp is Transform) continue;
 
                 totalComponentCount++;
-                string rawName = comp.GetType().Name;
-                string cleanName = SplitPascalCase(rawName);
+                Type t = comp.GetType();
+                string ns = t.Namespace ?? "";
 
-                Texture2D icon = EditorGUIUtility.ObjectContent(null, comp.GetType()).image as Texture2D;
+                bool isUnityComponent = ns.StartsWith("UnityEngine") || ns.StartsWith("UnityEditor") || ns.StartsWith("Unity");
+                bool isCustomScript = comp is MonoBehaviour && !isUnityComponent;
 
-                CachedComponent cachedComp = new CachedComponent
+                if (isCustomScript)
                 {
-                    Component = comp,
-                    CleanName = cleanName,
-                    Icon = icon
-                };
-
-                // Map to categories
-                string category = CategorizeComponent(comp);
-                groupDict[category].Items.Add(cachedComp);
-            }
-
-            foreach (var group in groupDict.Values)
-            {
-                if (group.Items.Count > 0)
-                {
-                    cachedCategories.Add(group);
-                }
-            }
-
-            FilterComponents();
-        }
-
-        private string CategorizeComponent(Component comp)
-        {
-            Type t = comp.GetType();
-            string ns = t.Namespace ?? "";
-
-            bool isUnityComponent = ns.StartsWith("UnityEngine") || ns.StartsWith("UnityEditor") || ns.StartsWith("Unity");
-            if (comp is MonoBehaviour && !isUnityComponent)
-            {
-                return "Scripts";
-            }
-
-            if (t.Name.Contains("Camera") || t.Name.Contains("Renderer") || t.Name.Contains("CanvasRenderer") || t.Name.Contains("MeshFilter") || comp is Skybox || comp is Projector)
-            {
-                return "Rendering";
-            }
-            if (comp is Collider || comp is Collider2D || comp is Rigidbody || comp is Rigidbody2D || t.Name.Contains("Joint") || comp is ConstantForce)
-            {
-                return "Physics";
-            }
-            if (comp is AudioSource || comp is AudioListener || t.Name.Contains("Audio"))
-            {
-                return "Audio";
-            }
-            if (comp is Animator || comp is Animation || t.Name.Contains("Playable"))
-            {
-                return "Animation";
-            }
-            if (t.Name.Contains("Canvas") || t.Name.Contains("Graphic") || t.Name.Contains("Button") || t.Name.Contains("Text") || t.Name.Contains("Image") || t.Name.Contains("Layout") || t.Name.Contains("EventSystem"))
-            {
-                return "UI";
-            }
-            if (t.Name.Contains("NavMesh") || t.Name.Contains("OffMeshLink"))
-            {
-                return "Navigation";
-            }
-            if (t.Name.Contains("Agent") || t.Name.Contains("Sensor") || t.Name.Contains("Decision") || t.Name.Contains("Behaviour"))
-            {
-                return "AI";
-            }
-            if (comp is Light || comp is ReflectionProbe || comp is LightProbeGroup || t.Name.Contains("Light"))
-            {
-                return "Lighting";
-            }
-
-            return "Miscellaneous";
-        }
-
-        private void FilterComponents()
-        {
-            totalFilteredCount = 0;
-            string filter = searchQuery.Trim().ToLower();
-
-            foreach (var group in cachedCategories)
-            {
-                group.FilteredItems.Clear();
-                foreach (var item in group.Items)
-                {
-                    if (string.IsNullOrEmpty(filter) || item.CleanName.ToLower().Contains(filter))
+                    if (scriptDict.TryGetValue(t, out var item))
                     {
-                        group.FilteredItems.Add(item);
-                        totalFilteredCount++;
+                        item.Count++;
+                    }
+                    else
+                    {
+                        Texture2D icon = EditorGUIUtility.ObjectContent(null, t).image as Texture2D;
+                        scriptDict[t] = new ScriptItem
+                        {
+                            Name = SplitPascalCase(t.Name),
+                            Icon = icon,
+                            Count = 1
+                        };
+                    }
+                }
+                else
+                {
+                    if (unityDict.TryGetValue(t, out var item))
+                    {
+                        item.Count++;
+                    }
+                    else
+                    {
+                        Texture2D icon = EditorGUIUtility.ObjectContent(null, t).image as Texture2D;
+                        unityDict[t] = new UnityComponentItem
+                        {
+                            Name = SplitPascalCase(t.Name),
+                            Icon = icon,
+                            Count = 1
+                        };
                     }
                 }
             }
+
+            customScripts.AddRange(scriptDict.Values);
+            unityComponents.AddRange(unityDict.Values);
         }
 
         private void PositionWindow()
@@ -261,31 +169,35 @@ namespace HierarchyDesigner
 
         private float CalculateHeight()
         {
-            float height = 48f; // Header
-
             if (totalComponentCount == 0)
             {
-                return 180f; // Empty state height
+                return 130f; // Minimal height for empty state
             }
 
-            foreach (var group in cachedCategories)
-            {
-                if (group.FilteredItems.Count == 0) continue;
+            float height = 40f; // Header
 
-                height += 28f; // Category Header
-                
-                CategoryCollapsedStates.TryGetValue(group.Name, out bool collapsed);
-                if (!collapsed)
-                {
-                    height += group.FilteredItems.Count * 22f; // Items
-                }
+            if (customScripts.Count > 0)
+            {
+                height += 24f; // Custom Scripts Label
+                height += (customScripts.Count * 22f) + 12f; // Box container and items
                 height += 8f; // Spacing
             }
 
-            // Interactive grid footer height
-            height += 84f;
+            if (unityComponents.Count > 0)
+            {
+                if (customScripts.Count > 0)
+                {
+                    height += 8f; // Divider spacing
+                }
+                height += 22f; // Unity Components label
+                
+                // Wrap horizontal items layout
+                int itemsPerRow = Mathf.FloorToInt((Width - 24f) / 36f);
+                int rows = Mathf.CeilToInt((float)unityComponents.Count / Mathf.Max(1, itemsPerRow));
+                height += (rows * 24f) + 12f;
+            }
 
-            return Mathf.Min(height, MaxHeight);
+            return Mathf.Min(height + 12f, MaxHeight);
         }
 
         private void Update()
@@ -337,7 +249,7 @@ namespace HierarchyDesigner
 
             GUILayout.BeginArea(new Rect(0, 0, position.width, position.height), cardStyle);
             
-            // Header row with Name and Active Status
+            // Header: Name and Total Added Components count
             DrawHeader();
 
             if (totalComponentCount == 0)
@@ -346,24 +258,29 @@ namespace HierarchyDesigner
             }
             else
             {
-                // Component Categories List
-                float contentHeight = position.height - 48f - 84f; // subtracting header and grid footer
-                scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(contentHeight));
                 GUILayout.BeginVertical();
-                GUILayout.Space(4);
+                GUILayout.Space(6f);
 
-                foreach (var group in cachedCategories)
+                // Section 1: Custom Scripts list
+                if (customScripts.Count > 0)
                 {
-                    if (group.FilteredItems.Count == 0) continue;
-                    DrawCategoryGroup(group);
+                    DrawScriptsSection();
+                }
+
+                // Divider line if both groups are present
+                if (customScripts.Count > 0 && unityComponents.Count > 0)
+                {
+                    DrawSectionDivider();
+                }
+
+                // Section 2: Unity Built-in Components icons
+                if (unityComponents.Count > 0)
+                {
+                    DrawUnityComponentsSection();
                 }
 
                 GUILayout.EndVertical();
-                EditorGUILayout.EndScrollView();
             }
-
-            // Interactive Grid Footer (Tag, Layer, Static, Active controls)
-            DrawGridFooter();
 
             GUILayout.EndArea();
             GUI.color = guiColor;
@@ -371,280 +288,190 @@ namespace HierarchyDesigner
 
         private void DrawHeader()
         {
-            Rect rect = GUILayoutUtility.GetRect(0f, 48f);
-            
-            // Draw lighter header background
+            Rect rect = GUILayoutUtility.GetRect(0f, 40f);
             EditorGUI.DrawRect(rect, HeaderBgColor);
             EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), BorderColor);
 
-            // Icon box
+            // GameObject Icon
             Texture2D goIcon = EditorGUIUtility.ObjectContent(targetGameObject, typeof(GameObject)).image as Texture2D;
             if (goIcon != null)
             {
-                GUI.DrawTexture(new Rect(rect.x + 12f, rect.y + 14f, 20f, 20f), goIcon);
+                GUI.DrawTexture(new Rect(rect.x + 12f, rect.y + 11f, 18f, 18f), goIcon);
             }
 
-            // Title label
-            GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
+            // GameObject Name
+            GUIStyle nameStyle = new GUIStyle(EditorStyles.boldLabel)
             {
-                fontSize = 13,
+                fontSize = 12,
                 alignment = TextAnchor.MiddleLeft,
                 normal = { textColor = Color.white }
             };
-            GUI.Label(new Rect(rect.x + 38f, rect.y + 6f, 200f, 20f), targetGameObject.name, titleStyle);
+            GUI.Label(new Rect(rect.x + 34f, rect.y + 10f, Width - 100f, 20f), targetGameObject.name, nameStyle);
 
-            // Subtitle status (Static & Active labels)
-            GUIStyle subtitleStyle = new GUIStyle(EditorStyles.miniLabel)
-            {
-                fontSize = 9,
-                richText = true,
-                normal = { textColor = new Color(0.6f, 0.6f, 0.6f) }
-            };
-            string staticStr = targetGameObject.isStatic ? "<color=#5bc266>Static</color>" : "Static";
-            string activeStr = targetGameObject.activeSelf ? "<color=#5bc266>Active</color>" : "<color=#e05e5e>Inactive</color>";
-            GUI.Label(new Rect(rect.x + 38f, rect.y + 24f, 200f, 16f), $"{staticStr}  •  {activeStr}", subtitleStyle);
-
-            // Total badge
-            GUIStyle badgeStyle = new GUIStyle(EditorStyles.boldLabel)
+            // X Added pill badge
+            GUIStyle badgeStyle = new GUIStyle(EditorStyles.miniBoldLabel)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 10,
-                normal = { textColor = Color.white }
+                normal = { textColor = new Color(0.85f, 0.85f, 0.85f) }
             };
-            Rect badgeRect = new Rect(rect.xMax - 32f, rect.y + 16f, 20f, 17f);
-            
+            Rect badgeRect = new Rect(rect.xMax - 66f, rect.y + 11f, 54f, 18f);
+
             GUIStyle capsuleStyle = new GUIStyle();
             capsuleStyle.normal.background = GetOrCreateHeaderTexture();
             capsuleStyle.border = new RectOffset(6, 6, 6, 6);
             GUI.Box(badgeRect, "", capsuleStyle);
             
-            GUI.Label(badgeRect, totalComponentCount.ToString(), badgeStyle);
+            GUI.Label(badgeRect, $"{totalComponentCount} Added", badgeStyle);
         }
 
-
-
-        private void DrawCategoryGroup(CategoryGroup group)
+        private void DrawScriptsSection()
         {
-            CategoryCollapsedStates.TryGetValue(group.Name, out bool collapsed);
-
-            Rect rect = GUILayoutUtility.GetRect(0f, 24f);
-
-            // Hover row highlight
-            if (Event.current.type == EventType.Repaint && rect.Contains(Event.current.mousePosition))
-            {
-                EditorGUI.DrawRect(rect, new Color(1f, 1f, 1f, 0.04f));
-            }
-
-            // Click header to toggle collapse
-            if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition) && Event.current.button == 0)
-            {
-                collapsed = !collapsed;
-                CategoryCollapsedStates[group.Name] = collapsed;
-                PositionWindow();
-                Event.current.Use();
-            }
-
-            // Toggle arrow symbol
-            string arrow = collapsed ? "▶" : "▼";
-            GUIStyle arrowStyle = new GUIStyle(EditorStyles.label)
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(12f);
+            GUIStyle sectionLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
             {
                 fontSize = 10,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.6f, 0.6f, 0.6f) }
+                normal = { textColor = new Color(0.72f, 0.61f, 1f) } // Scripts purple
             };
-            GUI.Label(new Rect(rect.x + 8f, rect.y + 4f, 16f, 16f), arrow, arrowStyle);
+            GUILayout.Label("📄 Custom Scripts", sectionLabelStyle);
+            GUILayout.EndHorizontal();
 
-            // Category title (with specific theme colored text)
-            GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                fontSize = 11,
-                normal = { textColor = group.TitleColor }
-            };
-            GUI.Label(new Rect(rect.x + 24f, rect.y + 4f, 150f, 16f), $"{group.IconStr}  {group.Name}", titleStyle);
+            // Box container wrapper
+            Rect containerRect = EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            GUILayout.Space(4f);
 
-            // Group count badge
-            GUIStyle countStyle = new GUIStyle(EditorStyles.boldLabel)
+            foreach (var item in customScripts)
             {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 9,
-                normal = { textColor = new Color(0.8f, 0.8f, 0.8f) }
-            };
-            Rect badgeRect = new Rect(rect.xMax - 32f, rect.y + 4f, 18f, 15f);
-            
-            GUIStyle capsuleStyle = new GUIStyle();
-            capsuleStyle.normal.background = GetOrCreateHeaderTexture();
-            capsuleStyle.border = new RectOffset(6, 6, 6, 6);
-            GUI.Box(badgeRect, "", capsuleStyle);
-            GUI.Label(badgeRect, group.FilteredItems.Count.ToString(), countStyle);
-
-            // Draw children items if expanded
-            if (!collapsed)
-            {
-                foreach (var item in group.FilteredItems)
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(6f);
+                
+                // Script Icon
+                if (item.Icon != null)
                 {
-                    DrawComponentRow(item);
+                    GUILayout.Label(item.Icon, GUILayout.Width(16f), GUILayout.Height(16f));
                 }
-            }
-            GUILayout.Space(6);
-        }
-
-        private void DrawComponentRow(CachedComponent item)
-        {
-            Rect rect = GUILayoutUtility.GetRect(0f, 22f);
-
-            // Row highlight hover effect
-            bool isHovered = rect.Contains(Event.current.mousePosition);
-            if (Event.current.type == EventType.Repaint && isHovered)
-            {
-                EditorGUI.DrawRect(rect, new Color(1f, 1f, 1f, 0.05f));
-            }
-
-            // Context Menu activation
-            if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
-            {
-                if (Event.current.button == 1) // Right Click
+                
+                // Name
+                GUIStyle nameStyle = new GUIStyle(EditorStyles.label)
                 {
-                    ShowComponentContextMenu(item);
-                    Event.current.Use();
-                }
-            }
-
-            // Component Icon (Unity official icon)
-            if (item.Icon != null)
-            {
-                GUI.DrawTexture(new Rect(rect.x + 28f, rect.y + 3f, 16f, 16f), item.Icon);
-            }
-
-            // Component Clean text
-            GUIStyle itemStyle = new GUIStyle(EditorStyles.label)
-            {
-                fontSize = 11,
-                normal = { textColor = isHovered ? Color.white : new Color(0.85f, 0.85f, 0.85f) }
-            };
-            GUI.Label(new Rect(rect.x + 48f, rect.y + 3f, Width - 80f, 16f), item.CleanName, itemStyle);
-
-            // Options Context Menu button on Hover
-            if (isHovered)
-            {
-                Rect contextBtnRect = new Rect(rect.xMax - 26f, rect.y + 2f, 18f, 18f);
-                GUIStyle contextStyle = new GUIStyle(EditorStyles.miniButton)
-                {
-                    alignment = TextAnchor.MiddleCenter,
-                    padding = new RectOffset(0, 0, 0, 0)
+                    fontSize = 11,
+                    normal = { textColor = new Color(0.85f, 0.85f, 0.85f) }
                 };
-                if (GUI.Button(contextBtnRect, "⋮", contextStyle))
+                GUILayout.Label(item.Name, nameStyle);
+
+                // Multiplier badge if count > 1
+                if (item.Count > 1)
                 {
-                    ShowComponentContextMenu(item);
+                    GUILayout.FlexibleSpace();
+                    GUIStyle multiplierStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+                    {
+                        normal = { textColor = new Color(0.6f, 0.6f, 0.6f) }
+                    };
+                    GUILayout.Label($"x{item.Count}", multiplierStyle);
+                    GUILayout.Space(6f);
                 }
+
+                GUILayout.EndHorizontal();
+                GUILayout.Space(2f);
             }
+
+            GUILayout.Space(2f);
+            EditorGUILayout.EndVertical();
+            GUILayout.Space(4f);
         }
 
-        private void ShowComponentContextMenu(CachedComponent item)
+        private void DrawSectionDivider()
         {
-            GenericMenu menu = new GenericMenu();
-            menu.AddItem(new GUIContent("Ping GameObject"), false, () => EditorGUIUtility.PingObject(targetGameObject));
-            menu.AddItem(new GUIContent("Highlight In Inspector"), false, () => {
-                Selection.activeGameObject = targetGameObject;
-                Highlighter.Highlight("Inspector", item.Component.GetType().Name);
-            });
-            menu.AddSeparator("");
-            menu.AddItem(new GUIContent("Copy Component Name"), false, () => EditorGUIUtility.systemCopyBuffer = item.CleanName);
-            menu.AddItem(new GUIContent("Copy Component Type"), false, () => EditorGUIUtility.systemCopyBuffer = item.Component.GetType().FullName);
-            menu.ShowAsContext();
+            Rect rect = GUILayoutUtility.GetRect(0f, 8f);
+            EditorGUI.DrawRect(new Rect(rect.x + 12f, rect.y + 3f, rect.width - 24f, 1f), DividerColor);
+        }
+
+        private void DrawUnityComponentsSection()
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(12f);
+            GUIStyle sectionLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+            {
+                fontSize = 10,
+                normal = { textColor = new Color(0.65f, 0.65f, 0.65f) }
+            };
+            GUILayout.Label("Unity Components", sectionLabelStyle);
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4f);
+
+            // Flow layout for icons side-by-side
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(12f);
+            
+            float currentX = 12f;
+            float maxRowWidth = Width - 24f;
+            float itemWidth = 20f;
+            
+            foreach (var item in unityComponents)
+            {
+                // If count > 1 we need extra width to draw the multiplier text "x2"
+                float currentItemWidth = item.Count > 1 ? 38f : itemWidth;
+
+                if (currentX + currentItemWidth > maxRowWidth)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Space(12f);
+                    currentX = 12f;
+                }
+
+                Rect itemRect = GUILayoutUtility.GetRect(currentItemWidth, 20f);
+                
+                // Draw Icon
+                if (item.Icon != null)
+                {
+                    GUI.DrawTexture(new Rect(itemRect.x, itemRect.y + 2f, 16f, 16f), item.Icon);
+                }
+                
+                // Draw multiplier text
+                if (item.Count > 1)
+                {
+                    GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
+                    {
+                        fontSize = 9,
+                        normal = { textColor = new Color(0.65f, 0.65f, 0.65f) }
+                    };
+                    GUI.Label(new Rect(itemRect.x + 18f, itemRect.y + 2f, 20f, 16f), $"x{item.Count}", labelStyle);
+                }
+
+                // Native hover tooltip containing the component type name
+                GUI.Label(new Rect(itemRect.x, itemRect.y, currentItemWidth, 20f), new GUIContent("", item.Name));
+
+                currentX += currentItemWidth + 6f;
+            }
+
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUILayout.Space(6f);
         }
 
         private void DrawEmptyState()
         {
             GUILayout.BeginVertical();
-            GUILayout.Space(24f);
+            GUILayout.Space(16f);
 
             GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
             {
-                fontSize = 12,
+                fontSize = 11,
                 alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.6f, 0.6f, 0.6f) }
+                normal = { textColor = new Color(0.55f, 0.55f, 0.55f) }
             };
             GUIStyle bodyStyle = new GUIStyle(EditorStyles.miniLabel)
             {
-                fontSize = 10,
+                fontSize = 9,
                 alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.45f, 0.45f, 0.45f) }
+                normal = { textColor = new Color(0.42f, 0.42f, 0.42f) }
             };
 
-            GUILayout.Label("📂  No Components Found", titleStyle);
+            GUILayout.Label("📂  No Added Components", titleStyle);
             GUILayout.Label("This GameObject only contains a Transform component.", bodyStyle);
 
             GUILayout.EndVertical();
-        }
-
-        private void DrawGridFooter()
-        {
-            Rect rect = new Rect(0f, position.height - 84f, position.width, 84f);
-            
-            // Separator lines
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), BorderColor);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y + 1f, rect.width, rect.height - 1f), HeaderBgColor);
-
-            // Draw grid dividers
-            float midX = rect.x + rect.width * 0.5f;
-            float midY = rect.y + 44f;
-            EditorGUI.DrawRect(new Rect(midX, rect.y + 4f, 1f, 76f), DividerColor);
-            EditorGUI.DrawRect(new Rect(rect.x + 8f, midY, rect.width - 16f, 1f), DividerColor);
-
-            // Grid cell coordinates
-            Rect cellTag = new Rect(rect.x + 12f, rect.y + 6f, midX - 20f, 32f);
-            Rect cellLayer = new Rect(midX + 12f, rect.y + 6f, midX - 20f, 32f);
-            Rect cellStatic = new Rect(rect.x + 12f, midY + 6f, midX - 20f, 32f);
-            Rect cellActive = new Rect(midX + 12f, midY + 6f, midX - 20f, 32f);
-
-            GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
-            {
-                fontSize = 9,
-                normal = { textColor = new Color(0.55f, 0.55f, 0.55f) }
-            };
-
-            // Cell 1: Tag Selector
-            GUI.Label(new Rect(cellTag.x, cellTag.y, 80f, 12f), "🏷️ Tag", labelStyle);
-            EditorGUI.BeginChangeCheck();
-            string newTag = EditorGUI.TagField(new Rect(cellTag.x, cellTag.y + 12f, cellTag.width - 10f, 16f), targetGameObject.tag);
-            if (EditorGUI.EndChangeCheck())
-            {
-                Undo.RecordObject(targetGameObject, "Change Tag");
-                targetGameObject.tag = newTag;
-            }
-
-            // Cell 2: Layer Selector
-            GUI.Label(new Rect(cellLayer.x, cellLayer.y, 80f, 12f), "📍 Layer", labelStyle);
-            EditorGUI.BeginChangeCheck();
-            int newLayer = EditorGUI.LayerField(new Rect(cellLayer.x, cellLayer.y + 12f, cellLayer.width - 10f, 16f), targetGameObject.layer);
-            if (EditorGUI.EndChangeCheck())
-            {
-                Undo.RecordObject(targetGameObject, "Change Layer");
-                targetGameObject.layer = newLayer;
-            }
-
-            // Cell 3: Static Selector
-            GUI.Label(new Rect(cellStatic.x, cellStatic.y, 80f, 12f), "🌍 Static", labelStyle);
-            EditorGUI.BeginChangeCheck();
-            bool newStatic = EditorGUI.Toggle(new Rect(cellStatic.x, cellStatic.y + 12f, 16f, 16f), targetGameObject.isStatic);
-            GUIStyle toggleLabelStyle = new GUIStyle(EditorStyles.miniLabel) { fontSize = 10 };
-            GUI.Label(new Rect(cellStatic.x + 20f, cellStatic.y + 12f, 80f, 16f), newStatic ? "Yes" : "No", toggleLabelStyle);
-            if (EditorGUI.EndChangeCheck())
-            {
-                Undo.RecordObject(targetGameObject, "Change Static");
-                targetGameObject.isStatic = newStatic;
-            }
-
-            // Cell 4: Active State Selector
-            GUI.Label(new Rect(cellActive.x, cellActive.y, 80f, 12f), "⚡ Active", labelStyle);
-            EditorGUI.BeginChangeCheck();
-            bool newActive = EditorGUI.Toggle(new Rect(cellActive.x, cellActive.y + 12f, 16f, 16f), targetGameObject.activeSelf);
-            GUI.Label(new Rect(cellActive.x + 20f, cellActive.y + 12f, 80f, 16f), newActive ? "Yes" : "No", toggleLabelStyle);
-            if (EditorGUI.EndChangeCheck())
-            {
-                Undo.RecordObject(targetGameObject, "Change Active");
-                targetGameObject.SetActive(newActive);
-            }
         }
 
         private static string SplitPascalCase(string input)
