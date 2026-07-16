@@ -38,6 +38,12 @@ namespace HierarchyDesigner
         private static Texture2D headerTexture;
 
         private static Rect targetRowScreenRect;
+        private static Vector2 mouseScreenPosition;
+
+        public static void SetMouseScreenPosition(Vector2 screenPos)
+        {
+            mouseScreenPosition = screenPos;
+        }
 
         public static void ShowPopup(GameObject go, Rect rowRect)
         {
@@ -215,21 +221,29 @@ namespace HierarchyDesigner
                 scale = Mathf.Min(1f, scale + (float)(delta / 0.12) * 0.02f);
                 Repaint();
             }
-        }
 
-        private void OnGUI()
-        {
-            if (targetGameObject == null)
+            // Close if mouse is no longer over the hierarchy or the popup
+            var mouseOver = mouseOverWindow;
+            if (mouseOver == null || (mouseOver != this && !mouseOver.GetType().Name.Contains("Hierarchy")))
             {
                 Close();
                 return;
             }
 
-            // Check if mouse has exited both the popup and target row in screen space
-            Vector2 screenMousePos = GUIUtility.GUIToScreenPoint(Event.current.mousePosition);
-            Rect bufferPopupRect = new Rect(position.x - 12f, position.y - 12f, position.width + 24f, position.height + 24f);
+            if (mouseOver != this)
+            {
+                // Mouse is over the hierarchy window, verify it stays within target row or popup bounds (plus 12px buffer)
+                Rect bufferPopupRect = new Rect(position.x - 12f, position.y - 12f, position.width + 24f, position.height + 24f);
+                if (!targetRowScreenRect.Contains(mouseScreenPosition) && !bufferPopupRect.Contains(mouseScreenPosition))
+                {
+                    Close();
+                }
+            }
+        }
 
-            if (!targetRowScreenRect.Contains(screenMousePos) && !bufferPopupRect.Contains(screenMousePos))
+        private void OnGUI()
+        {
+            if (targetGameObject == null)
             {
                 Close();
                 return;

@@ -149,6 +149,11 @@ namespace HierarchyDesigner.Editor
             GameObject go = EditorUtility.InstanceIDToObject(instanceID) as GameObject;
             if (go == null) return;
 
+            if (Event.current != null && (Event.current.type == EventType.MouseMove || Event.current.type == EventType.Repaint))
+            {
+                HierarchyComponentPopup.SetMouseScreenPosition(GUIUtility.GUIToScreenPoint(Event.current.mousePosition));
+            }
+
             // Load database if not already loaded
             if (cachedDatabase == null)
             {
