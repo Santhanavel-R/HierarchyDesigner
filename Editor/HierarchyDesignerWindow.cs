@@ -31,6 +31,11 @@ namespace HierarchyDesigner.Editor
         private SerializedProperty showGameObjectBorderProperty;
         private SerializedProperty gameObjectBorderColorProperty;
         private SerializedProperty gameObjectBorderOpacityProperty;
+        private SerializedProperty childCountColorModeProperty;
+        private SerializedProperty childCountBorderStyleProperty;
+        private SerializedProperty childCountTextColorProperty;
+        private SerializedProperty childCountBgColorProperty;
+        private SerializedProperty childCountBorderColorProperty;
 
         private ReorderableList headerList;
         private Vector2 scrollPosition;
@@ -132,6 +137,11 @@ namespace HierarchyDesigner.Editor
                 showGameObjectBorderProperty = serializedDatabase.FindProperty("showGameObjectBorder");
                 gameObjectBorderColorProperty = serializedDatabase.FindProperty("gameObjectBorderColor");
                 gameObjectBorderOpacityProperty = serializedDatabase.FindProperty("gameObjectBorderOpacity");
+                childCountColorModeProperty = serializedDatabase.FindProperty("childCountColorMode");
+                childCountBorderStyleProperty = serializedDatabase.FindProperty("childCountBorderStyle");
+                childCountTextColorProperty = serializedDatabase.FindProperty("childCountTextColor");
+                childCountBgColorProperty = serializedDatabase.FindProperty("childCountBgColor");
+                childCountBorderColorProperty = serializedDatabase.FindProperty("childCountBorderColor");
 
                 SetupReorderableList();
             }
@@ -345,6 +355,26 @@ namespace HierarchyDesigner.Editor
             EditorGUILayout.PropertyField(showChildCountBadgesProperty, new GUIContent("Child Counts"));
             GUILayout.EndHorizontal();
 
+            if (showChildCountBadgesProperty.boolValue)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(childCountColorModeProperty, new GUIContent("Color Mode"));
+                EditorGUILayout.PropertyField(childCountTextColorProperty, new GUIContent("Text Color"));
+                if (childCountColorModeProperty.intValue == (int)HierarchyChildCountColorMode.Custom)
+                {
+                    EditorGUILayout.PropertyField(childCountBgColorProperty, new GUIContent("Background Color"));
+                }
+                
+                EditorGUILayout.PropertyField(childCountBorderStyleProperty, new GUIContent("Border Style"));
+                if (childCountBorderStyleProperty.intValue == (int)HierarchyChildCountBorderStyle.Outline || 
+                    childCountBorderStyleProperty.intValue == (int)HierarchyChildCountBorderStyle.SolidWithOutline)
+                {
+                    EditorGUILayout.PropertyField(childCountBorderColorProperty, new GUIContent("Border Color"));
+                }
+                EditorGUI.indentLevel--;
+                EditorGUILayout.Space(4);
+            }
+
             EditorGUILayout.Space(4);
             EditorGUILayout.PropertyField(showGameObjectBorderProperty, new GUIContent("GameObject Border"));
             if (showGameObjectBorderProperty.boolValue)
@@ -362,7 +392,15 @@ namespace HierarchyDesigner.Editor
             // Box 3: Nesting Lines Settings
             GUILayout.BeginVertical(EditorStyles.helpBox);
             GUILayout.Label("Nesting Lines Settings", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(showNestingLinesProperty, new GUIContent("Nesting Lines"));
+            
+            GUILayout.BeginHorizontal();
+            EditorGUILayout.PropertyField(showNestingLinesProperty, new GUIContent("Nesting Lines"), GUILayout.Width(150f));
+            if (showNestingLinesProperty.boolValue && !useRainbowNestingProperty.boolValue)
+            {
+                EditorGUILayout.PropertyField(nestingLinesColorProperty, GUIContent.none);
+            }
+            GUILayout.EndHorizontal();
+
             if (showNestingLinesProperty.boolValue)
             {
                 EditorGUI.indentLevel++;
@@ -373,12 +411,6 @@ namespace HierarchyDesigner.Editor
                     EditorGUI.indentLevel++;
                     EditorGUILayout.PropertyField(rainbowPaletteProperty, new GUIContent("Rainbow Palette Theme"));
                     EditorGUILayout.PropertyField(nestingLinesOpacityProperty, new GUIContent("Rainbow Opacity"));
-                    EditorGUI.indentLevel--;
-                }
-                else
-                {
-                    EditorGUI.indentLevel++;
-                    EditorGUILayout.PropertyField(nestingLinesColorProperty, new GUIContent("Nesting Line Color"));
                     EditorGUI.indentLevel--;
                 }
                 EditorGUI.indentLevel--;

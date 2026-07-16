@@ -380,22 +380,23 @@ namespace HierarchyDesigner.Editor
             if (cachedDatabase != null && cachedDatabase.ShowChildCountBadges && go.transform.childCount > 0)
             {
                 int count = go.transform.childCount;
-                string text = $"[ {count} ]";
+                HierarchyChildCountBorderStyle style = cachedDatabase.ChildCountBorderStyle;
+                string text = (style == HierarchyChildCountBorderStyle.None) ? $"[ {count} ]" : $"{count}";
 
                 GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
                 {
                     alignment = TextAnchor.MiddleCenter,
                     fontStyle = FontStyle.Bold,
-                    normal = { textColor = new Color(0.75f, 0.75f, 0.75f) }
+                    normal = { textColor = cachedDatabase.ChildCountTextColor }
                 };
                 Vector2 size = labelStyle.CalcSize(new GUIContent(text));
-                float badgeW = Mathf.Max(24f, size.x + 8f);
+                float badgeW = (style == HierarchyChildCountBorderStyle.None) ? Mathf.Max(24f, size.x + 8f) : Mathf.Max(16f, size.x + 8f);
                 float badgeH = 13f;
 
                 if (currentX - badgeW >= limitX)
                 {
                     Rect badgeRect = new Rect(currentX - badgeW, rect.y + (rect.height - badgeH) * 0.5f, badgeW, badgeH);
-                    DrawChildCountBadge(badgeRect, count);
+                    DrawChildCountBadge(badgeRect, count, go);
                     currentX -= badgeW + 6f;
                 }
             }
@@ -435,15 +436,80 @@ namespace HierarchyDesigner.Editor
             }
         }
 
-        private static void DrawChildCountBadge(Rect rect, int count)
+        private static void DrawChildCountBadge(Rect rect, int count, GameObject go)
         {
+            if (cachedDatabase == null) return;
+
+            // 1. Determine base colors
+            Color textColor = cachedDatabase.ChildCountTextColor;
+            Color bgColor = cachedDatabase.ChildCountBgColor;
+            Color borderColor = cachedDatabase.ChildCountBorderColor;
+
+            if (cachedDatabase.ChildCountColorMode == HierarchyChildCountColorMode.InheritNestingColor)
+            {
+                // Resolve depth
+                Transform t = go.transform;
+                int depth = 0;
+                Transform curr = t.parent;
+                while (curr != null)
+                {
+                    depth++;
+                    curr = curr.parent;
+                }
+
+                Color baseNestingColor = cachedDatabase.NestingLinesColor;
+                float opacity = cachedDatabase.NestingLinesOpacity;
+                if (cachedDatabase.UseRainbowNesting)
+                {
+                    Color[] activeRainbowColors = GetRainbowColors(cachedDatabase.RainbowPalette);
+                    int activeDepth = Mathf.Max(0, depth - 1);
+                    baseNestingColor = activeRainbowColors[activeDepth % activeRainbowColors.Length];
+                }
+                
+                // Inherit color for background (faded) and border (solid)
+                bgColor = new Color(baseNestingColor.r, baseNestingColor.g, baseNestingColor.b, baseNestingColor.a * opacity * 0.22f);
+                borderColor = new Color(baseNestingColor.r, baseNestingColor.g, baseNestingColor.b, baseNestingColor.a * opacity);
+            }
+
+            // 2. Draw background and borders
+            HierarchyChildCountBorderStyle style = cachedDatabase.ChildCountBorderStyle;
+
+            if (style == HierarchyChildCountBorderStyle.Solid || style == HierarchyChildCountBorderStyle.SolidWithOutline)
+            {
+                Texture2D pillTex = GetOrCreatePillTexture(bgColor);
+                if (pillTex != null)
+                {
+                    GUI.DrawTexture(rect, pillTex, ScaleMode.StretchToFill);
+                }
+                else
+                {
+                    EditorGUI.DrawRect(rect, bgColor);
+                }
+            }
+
+            if (style == HierarchyChildCountBorderStyle.Outline || style == HierarchyChildCountBorderStyle.SolidWithOutline)
+            {
+                Color borderCol = borderColor;
+                // Top line
+                EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), borderCol);
+                // Bottom line
+                EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), borderCol);
+                // Left line
+                EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), borderCol);
+                // Right line
+                EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), borderCol);
+            }
+
+            // 3. Draw text label
             GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
             {
                 alignment = TextAnchor.MiddleCenter,
                 fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(0.75f, 0.75f, 0.75f) }
+                normal = { textColor = textColor }
             };
-            GUI.Label(rect, $"[ {count} ]", labelStyle);
+            
+            string text = (style == HierarchyChildCountBorderStyle.None) ? $"[ {count} ]" : $"{count}";
+            GUI.Label(rect, text, labelStyle);
         }
 
         /// <summary>
