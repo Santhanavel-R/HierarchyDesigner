@@ -32,8 +32,13 @@ namespace HierarchyDesigner.Runtime
     public enum HierarchyChildCountBorderStyle
     {
         None,
-        ClassicBox,
-        ModernPill
+        Classic,
+        Bubble,
+        Diamond,
+        Hexagon,
+        Notification,
+        Dot,
+        Tag
     }
 
     /// <summary>
@@ -79,7 +84,7 @@ namespace HierarchyDesigner.Runtime
 
         [SerializeField]
         [Tooltip("The border outline/filled style for child count badges.")]
-        private HierarchyChildCountBorderStyle childCountBorderStyle = HierarchyChildCountBorderStyle.ModernPill;
+        private HierarchyChildCountBorderStyle childCountBorderStyle = HierarchyChildCountBorderStyle.Classic;
 
         [SerializeField]
         [Tooltip("The text label color inside the child count badge.")]
@@ -150,7 +155,7 @@ namespace HierarchyDesigner.Runtime
             showComponentIcons = true;
             showChildCountBadges = true;
             childCountColorMode = HierarchyChildCountColorMode.InheritNestingColor;
-            childCountBorderStyle = HierarchyChildCountBorderStyle.ModernPill;
+            childCountBorderStyle = HierarchyChildCountBorderStyle.Classic;
             childCountTextColor = new Color(0.75f, 0.75f, 0.75f, 1f);
             childCountBorderColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
             useRainbowNesting = true;

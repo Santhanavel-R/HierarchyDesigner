@@ -381,16 +381,41 @@ namespace HierarchyDesigner.Editor
             {
                 int count = go.transform.childCount;
                 HierarchyChildCountBorderStyle style = cachedDatabase.ChildCountBorderStyle;
-                string text = (style == HierarchyChildCountBorderStyle.None) ? $"[ {count} ]" : $"{count}";
+                
+                string text = $"{count}";
+                switch (style)
+                {
+                    case HierarchyChildCountBorderStyle.Classic:
+                        text = $"[{count}]";
+                        break;
+                    case HierarchyChildCountBorderStyle.Bubble:
+                        text = $"({count})";
+                        break;
+                    case HierarchyChildCountBorderStyle.Diamond:
+                        text = $"◆ {count}";
+                        break;
+                    case HierarchyChildCountBorderStyle.Hexagon:
+                        text = $"⬢ {count}";
+                        break;
+                    case HierarchyChildCountBorderStyle.Notification:
+                        text = $"● {count}";
+                        break;
+                    case HierarchyChildCountBorderStyle.Dot:
+                        text = $"◉ {count}";
+                        break;
+                }
 
                 GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
                 {
                     alignment = TextAnchor.MiddleCenter,
-                    fontStyle = FontStyle.Bold,
-                    normal = { textColor = cachedDatabase.ChildCountTextColor }
+                    fontStyle = FontStyle.Bold
                 };
                 Vector2 size = labelStyle.CalcSize(new GUIContent(text));
-                float badgeW = (style == HierarchyChildCountBorderStyle.None) ? Mathf.Max(24f, size.x + 8f) : Mathf.Max(16f, size.x + 8f);
+                float badgeW = size.x + 4f;
+                if (style == HierarchyChildCountBorderStyle.Tag)
+                {
+                    badgeW = size.x + 10f;
+                }
                 float badgeH = 13f;
 
                 if (currentX - badgeW >= limitX)
@@ -440,9 +465,11 @@ namespace HierarchyDesigner.Editor
         {
             if (cachedDatabase == null) return;
 
-            // 1. Determine base colors (no colored background)
+            // 1. Determine text (inherited) and decoration colors
             Color textColor = cachedDatabase.ChildCountTextColor;
-            Color borderColor = cachedDatabase.ChildCountBorderColor;
+            Color decColor = cachedDatabase.ChildCountBorderColor;
+
+            HierarchyThemeData theme = cachedDatabase.GetActiveTheme();
 
             if (cachedDatabase.ChildCountColorMode == HierarchyChildCountColorMode.InheritNestingColor)
             {
@@ -465,109 +492,80 @@ namespace HierarchyDesigner.Editor
                     baseNestingColor = activeRainbowColors[activeDepth % activeRainbowColors.Length];
                 }
                 
-                // Inherit color for text and border
+                // Inherit color for text
                 textColor = new Color(baseNestingColor.r, baseNestingColor.g, baseNestingColor.b, baseNestingColor.a * opacity);
-                borderColor = new Color(baseNestingColor.r, baseNestingColor.g, baseNestingColor.b, baseNestingColor.a * opacity);
+                
+                // Decoration color follows the active theme line color or global nesting guide line color
+                decColor = (theme != null) ? theme.treeLineColor : cachedDatabase.NestingLinesColor;
             }
 
-            // 2. Draw border
             HierarchyChildCountBorderStyle style = cachedDatabase.ChildCountBorderStyle;
-            DrawBadgeBorder(rect, borderColor, style);
+
+            // 2. Build rich text string based on style
+            string hexText = ColorUtility.ToHtmlStringRGBA(textColor);
+            string hexDec = ColorUtility.ToHtmlStringRGBA(decColor);
+
+            string richText = "";
+            Rect drawRect = rect;
+
+            switch (style)
+            {
+                case HierarchyChildCountBorderStyle.None:
+                    richText = $"<color=#{hexText}>{count}</color>";
+                    break;
+                case HierarchyChildCountBorderStyle.Classic:
+                    richText = $"<color=#{hexDec}>[</color><color=#{hexText}>{count}</color><color=#{hexDec}>]</color>";
+                    break;
+                case HierarchyChildCountBorderStyle.Bubble:
+                    richText = $"<color=#{hexDec}>(</color><color=#{hexText}>{count}</color><color=#{hexDec}>)</color>";
+                    break;
+                case HierarchyChildCountBorderStyle.Diamond:
+                    richText = $"<color=#{hexDec}>◆ </color><color=#{hexText}>{count}</color>";
+                    break;
+                case HierarchyChildCountBorderStyle.Hexagon:
+                    richText = $"<color=#{hexDec}>⬢ </color><color=#{hexText}>{count}</color>";
+                    break;
+                case HierarchyChildCountBorderStyle.Notification:
+                    richText = $"<color=#{hexDec}>● </color><color=#{hexText}>{count}</color>";
+                    break;
+                case HierarchyChildCountBorderStyle.Dot:
+                    richText = $"<color=#{hexDec}>◉ </color><color=#{hexText}>{count}</color>";
+                    break;
+                case HierarchyChildCountBorderStyle.Tag:
+                    richText = $"<color=#{hexText}>{count}</color>";
+                    drawRect.xMin += 1f;
+                    drawRect.xMax -= 3f;
+                    DrawTagBorder(rect, decColor);
+                    break;
+            }
 
             // 3. Draw text label
             GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
             {
                 alignment = TextAnchor.MiddleCenter,
                 fontStyle = FontStyle.Bold,
-                normal = { textColor = textColor }
+                richText = true
             };
             
-            string text = (style == HierarchyChildCountBorderStyle.None) ? $"[ {count} ]" : $"{count}";
-            GUI.Label(rect, text, labelStyle);
+            GUI.Label(drawRect, richText, labelStyle);
         }
 
-        private static readonly Dictionary<Color, Texture2D> OutlinedPillTextureCache = new Dictionary<Color, Texture2D>();
-
-        private static Texture2D GetOrCreateOutlinedPillTexture(Color color)
+        private static void DrawTagBorder(Rect rect, Color color)
         {
-            if (OutlinedPillTextureCache.TryGetValue(color, out Texture2D tex) && tex != null)
-            {
-                return tex;
-            }
-
-            int width = 32;
-            int height = 16;
-            tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
-            int radius = 6;
-            int thickness = 1;
-
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    bool isInsideOutline = false;
-                    
-                    bool isCorner = false;
-                    float dx = 0, dy = 0;
-                    if (x < radius && y < radius) { isCorner = true; dx = x - radius; dy = y - radius; }
-                    else if (x < radius && y >= height - radius) { isCorner = true; dx = x - radius; dy = y - (height - radius); }
-                    else if (x >= width - radius && y < radius) { isCorner = true; dx = x - (width - radius); dy = y - radius; }
-                    else if (x >= width - radius && y >= height - radius) { isCorner = true; dx = x - (width - radius); dy = y - (height - radius); }
-
-                    if (isCorner)
-                    {
-                        float distSq = dx * dx + dy * dy;
-                        float outerRadiusSq = radius * radius;
-                        float innerRadiusSq = (radius - thickness) * (radius - thickness);
-                        if (distSq <= outerRadiusSq && distSq > innerRadiusSq)
-                        {
-                            isInsideOutline = true;
-                        }
-                    }
-                    else
-                    {
-                        bool isHorizontalEdge = y < thickness || y >= height - thickness;
-                        bool isVerticalEdge = x < thickness || x >= width - thickness;
-                        if (isHorizontalEdge || isVerticalEdge)
-                        {
-                            isInsideOutline = true;
-                        }
-                    }
-
-                    tex.SetPixel(x, y, isInsideOutline ? color : Color.clear);
-                }
-            }
-            tex.Apply();
-            OutlinedPillTextureCache[color] = tex;
-            return tex;
-        }
-
-        private static void DrawBadgeBorder(Rect rect, Color color, HierarchyChildCountBorderStyle style)
-        {
-            if (style == HierarchyChildCountBorderStyle.None) return;
-
-            if (style == HierarchyChildCountBorderStyle.ClassicBox)
-            {
-                EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), color);
-                EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color);
-                EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), color);
-                EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color);
-            }
-            else if (style == HierarchyChildCountBorderStyle.ModernPill)
-            {
-                Texture2D pillTex = GetOrCreateOutlinedPillTexture(color);
-                if (pillTex != null)
-                {
-                    GUI.DrawTexture(rect, pillTex, ScaleMode.StretchToFill);
-                }
-                else
-                {
-                    EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), color);
-                    EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color);
-                    EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), color);
-                    EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color);
-                }
-            }
+            // Left vertical line
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y + 1f, 1f, rect.height - 2f), color);
+            // Top horizontal line
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width - 4f, 1f), color);
+            // Bottom horizontal line
+            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width - 4f, 1f), color);
+            // Right arrow/tag tip lines
+            EditorGUI.DrawRect(new Rect(rect.xMax - 4f, rect.y + 1f, 1f, 1f), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - 3f, rect.y + 2f, 1f, 1f), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - 2f, rect.y + 3f, 1f, 1f), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y + 4f, 1f, rect.height - 8f), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - 2f, rect.yMax - 4f, 1f, 1f), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - 3f, rect.yMax - 3f, 1f, 1f), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - 4f, rect.yMax - 2f, 1f, 1f), color);
         }
 
         /// <summary>
